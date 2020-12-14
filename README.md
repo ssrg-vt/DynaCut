@@ -1,2 +1,2 @@
 # PopSnapshot
-Architecture-independent process snapshot and restart
+Architecture-independent process snapshot and restart.
