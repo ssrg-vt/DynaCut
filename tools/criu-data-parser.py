@@ -5,14 +5,17 @@ Author: Abhijit Mahurkar
 """
 
 import json
+import sys
+
+filepath = sys.argv[1]
 
 # open a CRIT decoded MM image (JSON file) for parsing
-with open("./dump6/mm_dump.json", mode='r') as mm_f:
+with open(filepath+"/mm_dump.json", mode='r') as mm_f:
     mm_data = json.load(mm_f)
 mm_list = mm_data['entries']
 
 # open a CRIT decoded PAGEMAP image (JSON file) for parsing
-with open("./dump6/pagemap_dump.json", mode='r') as pgmap_f:
+with open(filepath+"/pagemap_dump.json", mode='r') as pgmap_f:
     pgmap_data = json.load(pgmap_f)
 pgmap_list = pgmap_data['entries']
 
@@ -74,7 +77,7 @@ print('\nThe code start address is:', code_vma_start)
 print('The code end address is:', code_vma_end)
 
 # Modify binary
-with open("./dump/pages-1.img", mode='rb') as f:
+with open(filepath+"/pages-1.img", mode='rb') as f:
     f.seek(10,0)
     couple_bytes = f.read(1)
 print('\n', couple_bytes)
