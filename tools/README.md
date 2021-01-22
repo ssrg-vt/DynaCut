@@ -15,9 +15,9 @@ The CRIT decoded "MM" image file should be named: mm_dump.json
 The CRIT decoded "PAGEMAP" image file should be named: pagemap_dump.json
 
 Example: 
-'''
+```
 python3 criu-data-parser.py /home/abhijit/criu-dump/dump6
-'''
+```
 
 <h2>criu-modify-binary.py:</h2>
 This tool modifies a CRIU pages-1.img file to restore a modified version of the process
@@ -33,6 +33,6 @@ The CRIT decoded "MM" image file should be named: mm_dump.json
 The CRIT decoded "PAGEMAP" image file should be named: pagemap_dump.json
 
 Example: 
-'''
+```
 python3 criu-data-parser.py /home/abhijit/criu-dump/dump6 0x404044
-'''
+```
