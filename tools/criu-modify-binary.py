@@ -7,18 +7,20 @@ Author: Abhijit Mahurkar
 import sys
 import json
 
+filepath = sys.argv[1]
+address = sys.argv[2]
 pg_offset = 0
-address = sys.argv[1]
+
 print('The address to be modifed is:', address)
 
 # open a CRIT decoded MM image (JSON file) for parsing
-with open("./dump10/mm-dump", mode='r') as mm_f:
+with open(filepath+"/mm_dump.json", mode='r') as mm_f:
     mm_data = json.load(mm_f)
 
 mm_list = mm_data['entries']
 
 # open a CRIT decoded PAGEMAP image (JSON file) for parsing
-with open("./dump10/pagemap-dump", mode='r') as pgmap_f:
+with open(filepath+"/pagemap_dump.json", mode='r') as pgmap_f:
     pgmap_data = json.load(pgmap_f)
 
 pgmap_list = pgmap_data['entries']
@@ -32,15 +34,16 @@ for i in range(1, len(pgmap_list)):
                 binary_offset = pg_offset + (int(address, 16) - map_address)
     pg_offset = pg_offset + (4096 * pages)
 
-print(binary_offset)
+print('The offset from the start of the pages-1.img binary is:', binary_offset, '(decimal)')
 
 # Modify binary
-with open("./dump10/pages-1.img", mode='r+b') as f:
+with open(filepath+"/pages-1.img", mode='r+b') as f:
     f.seek(binary_offset,0)
     data_bytes = f.read(1)
     f.seek(-1, 1)
-    f.write(b'\x10')
-    data_bytes_write = f.read(4)
+    f.write(b'\x30')
+    f.seek(binary_offset, 0)
+    data_bytes_write = f.read(1)
 
 print('The data before modifying is', data_bytes.hex())
 print('The data after modifying is', data_bytes_write.hex())
