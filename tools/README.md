@@ -26,6 +26,8 @@ Input: Path to the CRIU dump folder and the address of the variable that needs t
 
 <h3>Pre-requisites:</h3> 
 
+Root access
+
 CRIT decoded "MM" image file and the CRIT decoded "PAGEMAP" image file
 
 The CRIT decoded "MM" image file should be named: mm_dump.json
@@ -34,5 +36,5 @@ The CRIT decoded "PAGEMAP" image file should be named: pagemap_dump.json
 
 Example: 
 ```
-python3 criu-data-parser.py /home/abhijit/criu-dump/dump6 0x404044
+sudo python3 criu-data-parser.py /home/abhijit/criu-dump/dump6 0x404044
 ```
