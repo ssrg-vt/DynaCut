@@ -1,3 +1,9 @@
+"""
+Author: Abhijit Mahurkar
+
+Description: A tool to add VMA regions to a CRIU snapshot image
+"""
+
 from package import images
 import fnmatch
 import os
