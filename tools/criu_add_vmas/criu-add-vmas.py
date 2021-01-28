@@ -22,13 +22,6 @@ pgmap_file = fnmatch.filter(os.listdir(filepath), 'pagemap-*.img')
 mm_file = fnmatch.filter(os.listdir(filepath), 'mm-*.img')
 pages_file = fnmatch.filter(os.listdir(filepath), 'pages-*.img')
 
-# Open Pages binary image
-with open(str(filepath + pages_file[0]), mode='rb') as f:
-    f.seek(16384,0)
-    data_bytes = f.read(1)
-    f.seek(-1, 1)
-    data_bytes_write = f.read(4)
-
 # Function to create a MM payload with start and end address of VMA region
 def create_mm_payload(vaddr1, vaddr2):
     payload = {\
