@@ -1,9 +1,7 @@
-"""
-A script to modify CRIU binary images
+#!/usr/bin/python3
 
-Author: Abhijit Mahurkar
-"""
-#!/usr/bin/env python3
+# A script to modify CRIU binary images
+# Author: Abhijit Mahurkar
 
 import json
 import sys

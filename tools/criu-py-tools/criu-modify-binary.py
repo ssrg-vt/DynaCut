@@ -1,10 +1,8 @@
-"""
-A Python script to modify a CRIU binary image using data from
-pagemap dump and mm dump
-
-Author: Abhijit Mahurkar
-"""
 #!/usr/bin/env python3
+
+# A Python script to modify a CRIU binary image using data from
+# pagemap dump and mm dump
+# Author: Abhijit Mahurkar
 
 import sys
 import json
