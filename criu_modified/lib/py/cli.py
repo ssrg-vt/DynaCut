@@ -51,7 +51,7 @@ def addvma(opts):
 	start_address=get_default_arg(opts, 'startaddress', "0x1000")
 	directory=get_default_arg(opts, 'directory', "./")
 	end_address=get_default_arg(opts, 'endaddress', "0x5000")
-	nr_pages=get_default_arg(opts, 'regionsize', 4)
+	nr_pages=get_default_arg(opts, 'regionsize', "4")
 	pycriu.add_vmas.add_vma_regions(start_address, end_address, nr_pages, directory)
 
 def encode(opts):

@@ -59,7 +59,7 @@ class Addvmas:
         
         with open(filepath + "zeros", mode='wb+') as f_zeros:
             f_zeros.seek(0)
-            f_zeros.write(bytearray(nr_pages * 4096))
+            f_zeros.write(bytearray(int(nr_pages) * 4096))
         
         # Append zeros to the file
         with open(filepath + "zeros", "ab+") as myfile, open(filepath + pages_file[0], "rb") as file2:
