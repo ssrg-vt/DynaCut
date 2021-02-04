@@ -17,14 +17,8 @@ class Addvmas:
     def open_files(self, filepath):
         
         pgmap_file = fnmatch.filter(os.listdir(filepath), 'pagemap-*.img')
-        if not pgmap_file:
-            sys.stderr.write("crit: addvma: no pagemap file found (empty dump folder?)")
         mm_file = fnmatch.filter(os.listdir(filepath), 'mm-*.img')
-        if not mm_file:
-            sys.stderr.write("crit: addvma: no mm image file found (empty dump folder?)")
         pages_file = fnmatch.filter(os.listdir(filepath), 'pages-*.img')
-        if not pages_file:
-            sys.stderr.write("crit: addvma: no pages image file found (empty dump folder?)")
     
         return pgmap_file, mm_file, pages_file
 
@@ -54,28 +48,28 @@ class Addvmas:
 
     def dump_new_images(self, mm_img, pgmap_img, mm_file, pgmap_file, filepath):
 
-        with open(filepath + mm_file[0], mode='rb+') as mm_file_write:
+        with open(os.path.join(filepath, mm_file[0]), mode='rb+') as mm_file_write:
             pycriu.images.dump(mm_img, mm_file_write)
 
-        with open(filepath + pgmap_file[0], mode='rb+') as pgmap_file_write:
+        with open(os.path.join(filepath, pgmap_file[0]), mode='rb+') as pgmap_file_write:
             pycriu.images.dump(pgmap_img, pgmap_file_write)
 
     # Modify binary
     def modify_binary(self, filepath, pages_file, nr_pages):
         
-        with open(filepath + "zeros", mode='wb+') as f_zeros:
+        with open(os.path.join(filepath, "zeros"), mode='wb+') as f_zeros:
             f_zeros.seek(0)
             f_zeros.write(bytearray(int(nr_pages) * 4096))
         
         # Append zeros to the file
-        with open(filepath + "zeros", "ab+") as myfile, open(filepath + pages_file[0], "rb") as file2:
+        with open(os.path.join(filepath, "zeros"), "ab+") as myfile, open(os.path.join(filepath, pages_file[0]), "rb") as file2:
             myfile.write(file2.read())
 
         # Delete original pages img without zeros
-        os.remove(filepath + pages_file[0])
+        os.remove(os.path.join(filepath, pages_file[0]))
 
         # Rename zeros file to original file
-        os.rename(filepath + "zeros", filepath + pages_file[0])
+        os.rename(os.path.join(filepath, "zeros"), os.path.join(filepath, pages_file[0]))
 
 
 # Function to add VMA regions to MM image and Pagemap Image
@@ -85,12 +79,19 @@ def add_vma_regions(vaddr1, vaddr2, nr_pages, filepath):
     # Open files for reading
     pgmap_file, mm_file, pages_file = addvma.open_files(filepath)
 
+    if not pgmap_file:
+        raise Exception("crit: addvma: no pagemap file found (empty dump folder?) \n")
+    if not mm_file:
+        raise Exception("crit: addvma: no mm image file found (empty dump folder?) \n")
+    if not pages_file:
+        raise Exception("crit: addvma: no pages image file found (empty dump folder?) \n")
+
     # Open PAGEMAP image
-    with open(str(filepath + pgmap_file[0]), mode='rb') as f:
+    with open(os.path.join(filepath,pgmap_file[0]), mode='rb') as f:
         pgmap_img = pycriu.images.load(f)
 
     # Open MM image
-    with open(str(filepath + mm_file[0]), mode='rb') as f:
+    with open(os.path.join(filepath,mm_file[0]), mode='rb') as f:
         mm_img = pycriu.images.load(f)
 
     pgmap_list = pgmap_img['entries']

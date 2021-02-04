@@ -51,7 +51,7 @@ def addvma(opts):
 	start_address=get_default_arg(opts, 'startaddress', "0x1000")
 	directory=get_default_arg(opts, 'directory', "./")
 	end_address=get_default_arg(opts, 'endaddress', "0x5000")
-	nr_pages=get_default_arg(opts, 'regionsize', "4")
+	nr_pages= (int(end_address, 16) - int(start_address, 16)) / 4096
 	pycriu.add_vmas.add_vma_regions(start_address, end_address, nr_pages, directory)
 
 def encode(opts):
@@ -404,7 +404,6 @@ def main():
     addvma_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
     addvma_parser.add_argument('-sa','--startaddress', help='VMA start address (Default: 0x1000)')
     addvma_parser.add_argument('-ea','--endaddress', help='end address of VMA section (Default: 0x5000)')
-    addvma_parser.add_argument('-rs','--regionsize', help='size of VMA region in number of pages (Default: 4)')
     addvma_parser.set_defaults(func=addvma, nopl=False)
 
     opts = vars(parser.parse_args())
