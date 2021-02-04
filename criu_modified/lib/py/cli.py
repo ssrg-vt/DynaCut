@@ -402,9 +402,9 @@ def main():
     # Add VMAs
     addvma_parser = subparsers.add_parser('addvma',help='Adds VMA sections to CRIU images')
     addvma_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
-    addvma_parser.add_argument('-sa','--startaddress', help='VMA start address')
-    addvma_parser.add_argument('-ea','--endaddress', help='end address of VMA section')
-    addvma_parser.add_argument('-rs','--regionsize', help='size of VMA region in number of pages')
+    addvma_parser.add_argument('-sa','--startaddress', help='VMA start address (Default: 0x1000)')
+    addvma_parser.add_argument('-ea','--endaddress', help='end address of VMA section (Default: 0x5000)')
+    addvma_parser.add_argument('-rs','--regionsize', help='size of VMA region in number of pages (Default: 4)')
     addvma_parser.set_defaults(func=addvma, nopl=False)
 
     opts = vars(parser.parse_args())

@@ -17,8 +17,14 @@ class Addvmas:
     def open_files(self, filepath):
         
         pgmap_file = fnmatch.filter(os.listdir(filepath), 'pagemap-*.img')
+        if not pgmap_file:
+            sys.stderr.write("crit: addvma: no pagemap file found (empty dump folder?)")
         mm_file = fnmatch.filter(os.listdir(filepath), 'mm-*.img')
+        if not mm_file:
+            sys.stderr.write("crit: addvma: no mm image file found (empty dump folder?)")
         pages_file = fnmatch.filter(os.listdir(filepath), 'pages-*.img')
+        if not pages_file:
+            sys.stderr.write("crit: addvma: no pages image file found (empty dump folder?)")
     
         return pgmap_file, mm_file, pages_file
 
