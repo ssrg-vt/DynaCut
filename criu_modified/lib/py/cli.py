@@ -48,11 +48,13 @@ def get_default_arg(opts, arg, default=""):
 		return opts[arg]
 	return default
 def addvma(opts):
-	start_address=get_default_arg(opts, 'startaddress', "0x1000")
-	directory=get_default_arg(opts, 'directory', "./")
-	end_address=get_default_arg(opts, 'endaddress', "0x5000")
-	nr_pages= (int(end_address, 16) - int(start_address, 16)) / 4096
-	pycriu.add_vmas.add_vma_regions(start_address, end_address, nr_pages, directory)
+    start_address=get_default_arg(opts, 'startaddress', "0x1000")
+    directory=get_default_arg(opts, 'directory', "./")
+    end_address=get_default_arg(opts, 'endaddress', "0x5000")
+    if(((int(end_address, 16) - int(start_address, 16)) % 4096) != 0):
+         raise Exception("VMA region is not a multiple of 4k")
+    nr_pages= (int(end_address, 16) - int(start_address, 16))/4096
+    pycriu.add_vmas.add_vma_regions(start_address, end_address, nr_pages, directory)
 
 def encode(opts):
     img = json.load(inf(opts))
