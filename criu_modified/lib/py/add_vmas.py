@@ -9,18 +9,11 @@ import sys
 import struct
 from operator import itemgetter
 
+import pycriu.utils
+
 class Addvmas:
     def __init__(self):
 		pass
-
-    # Get files from dump folder
-    def open_files(self, filepath):
-        
-        pgmap_file = fnmatch.filter(os.listdir(filepath), 'pagemap-*.img')
-        mm_file = fnmatch.filter(os.listdir(filepath), 'mm-*.img')
-        pages_file = fnmatch.filter(os.listdir(filepath), 'pages-*.img')
-    
-        return pgmap_file, mm_file, pages_file
 
     # Function to create a MM payload with start and end address of VMA region
     def create_mm_payload(self, vaddr1, vaddr2):
@@ -76,23 +69,9 @@ class Addvmas:
 def add_vma_regions(vaddr1, vaddr2, nr_pages, filepath):
     
     addvma = Addvmas()
-    # Open files for reading
-    pgmap_file, mm_file, pages_file = addvma.open_files(filepath)
-
-    if not pgmap_file:
-        raise Exception("crit: addvma: no pagemap file found (empty dump folder?) \n")
-    if not mm_file:
-        raise Exception("crit: addvma: no mm image file found (empty dump folder?) \n")
-    if not pages_file:
-        raise Exception("crit: addvma: no pages image file found (empty dump folder?) \n")
-
-    # Open PAGEMAP image
-    with open(os.path.join(filepath,pgmap_file[0]), mode='rb') as f:
-        pgmap_img = pycriu.images.load(f)
-
-    # Open MM image
-    with open(os.path.join(filepath,mm_file[0]), mode='rb') as f:
-        mm_img = pycriu.images.load(f)
+    
+    pgmap_file, mm_file, pages_file = pycriu.utils.open_files(filepath)
+    pgmap_img, mm_img = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
 
     pgmap_list = pgmap_img['entries']
     mm_list = mm_img['entries']

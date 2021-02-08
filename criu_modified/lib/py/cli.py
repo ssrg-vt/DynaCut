@@ -5,6 +5,7 @@ import json
 import os
 
 import pycriu
+import pycriu.disasm_pages
 
 def inf(opts):
     if opts['in']:
@@ -55,6 +56,10 @@ def addvma(opts):
          raise Exception("VMA region is not a multiple of 4k")
     nr_pages= (int(end_address, 16) - int(start_address, 16))/4096
     pycriu.add_vmas.add_vma_regions(start_address, end_address, nr_pages, directory)
+
+def disasm(opts):
+    directory=get_default_arg(opts, 'directory', "./")
+    pycriu.disasm_pages.disassemblePages(directory)
 
 def encode(opts):
     img = json.load(inf(opts))
@@ -407,6 +412,11 @@ def main():
     addvma_parser.add_argument('-sa','--startaddress', help='VMA start address (Default: 0x1000)')
     addvma_parser.add_argument('-ea','--endaddress', help='end address of VMA section (Default: 0x5000)')
     addvma_parser.set_defaults(func=addvma, nopl=False)
+
+    #Disassemble binary
+    disasm_parser = subparsers.add_parser('disasm',help='Disassembles code VMA sections in CRIU images')
+    disasm_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
+    disasm_parser.set_defaults(func=disasm, nopl=False)
 
     opts = vars(parser.parse_args())
 
