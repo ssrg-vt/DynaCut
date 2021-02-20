@@ -6,6 +6,7 @@ import os
 
 import pycriu
 import pycriu.disasm_pages
+import pycriu.process_edit
 
 def inf(opts):
     if opts['in']:
@@ -56,6 +57,23 @@ def addvma(opts):
          raise Exception("VMA region is not a multiple of 4k")
     nr_pages= (int(end_address, 16) - int(start_address, 16))/4096
     pycriu.add_vmas.add_vma_regions(start_address, end_address, nr_pages, directory)
+
+def mb(opts):
+    start_address=opts['address']
+    if not start_address:
+        raise Exception("Address cannot be empty!")
+    directory=get_default_arg(opts, 'directory', "./")
+    pycriu.process_edit.modify_binary(directory, start_address)
+
+def mbd(opts):
+    start_address=opts['startaddress']
+    if not start_address:
+        raise Exception("Start address cannot be empty!")
+    directory=get_default_arg(opts, 'directory', "./")
+    offset=opts['offset']
+    if not offset:
+        raise Exception("Offset address cannot be empty!")
+    pycriu.process_edit.modify_binary_dynamic(directory, start_address, offset)
 
 def disasm(opts):
     directory=get_default_arg(opts, 'directory', "./")
@@ -417,6 +435,19 @@ def main():
     disasm_parser = subparsers.add_parser('disasm',help='Disassembles code VMA sections in CRIU images')
     disasm_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
     disasm_parser.set_defaults(func=disasm, nopl=False)
+
+    #Modify Binary
+    mb_parser = subparsers.add_parser('mb',help='Writes INT3 to the specified offset location')
+    mb_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
+    mb_parser.add_argument('-a','--address', help='Address to be modified')
+    mb_parser.set_defaults(func=mb, nopl=False)
+
+    #Modify Binary Dynamic
+    mbd_parser = subparsers.add_parser('mbd',help='Writes INT3 to the specified offset location for a dynamically linked binary')
+    mbd_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
+    mbd_parser.add_argument('-sa','--startaddress', help='VMA start address')
+    mbd_parser.add_argument('-off', '--offset', help='Offset of the location from the beginning of the shared library')
+    mbd_parser.set_defaults(func=mbd, nopl=False)
 
     opts = vars(parser.parse_args())
 

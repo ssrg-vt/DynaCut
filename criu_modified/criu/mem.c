@@ -122,7 +122,9 @@ bool should_dump_page(VmaEntry *vmae, u64 pme)
 	 * yet being COW-ed
 	 */
 	if (vma_entry_is(vmae, VMA_FILE_PRIVATE) && (pme & PME_FILE))
-		return false;
+		//return false;
+		//Abhijit Mahurkar: Changed to dump FILE_PRIVATE regions
+		return true;
 	if (vma_entry_is(vmae, VMA_AREA_AIORING))
 		return true;
 	if ((pme & (PME_PRESENT | PME_SWAP)) && !__page_is_zero(pme))
