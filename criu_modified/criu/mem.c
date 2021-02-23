@@ -119,10 +119,7 @@ bool should_dump_page(VmaEntry *vmae, u64 pme)
 
 	//Abhijit Mahurkar: Added option to dump FILE_PRIVATE regions
 	if (vma_entry_is(vmae, VMA_FILE_PRIVATE) && (pme & PME_FILE) && vma_entry_prot(vmae, PROT_EXEC))
-	{
-		pr_debug("AM: This is the new if \n");
 		return true;
-	}
 	/*
 	 * Optimisation for private mapping pages, that haven't
 	 * yet being COW-ed
