@@ -89,6 +89,10 @@ extern int parse_self_maps_lite(struct vm_area_list *vms);
 #define vma_entry_is(vma, s)		(((vma)->status & (s)) == (s))
 #define vma_entry_len(vma)		((vma)->end - (vma)->start)
 
+// Abhijit Mahurkar: Added to check if the VMA region is PROT_EXEC
+#define vma_entry_prot(vma, s)		(((vma)->prot & (s)) == (s))
+
+
 /*
  * vma_premmaped_start() can be used only in restorer.
  * In other cases vma_area->premmaped_addr must be used.
