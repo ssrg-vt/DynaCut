@@ -3,7 +3,7 @@ import argparse
 import sys
 import json
 import os
-
+import re
 import pycriu
 import pycriu.disasm_pages
 import pycriu.process_edit
@@ -74,6 +74,28 @@ def mbd(opts):
     if not offset:
         raise Exception("Offset address cannot be empty!")
     pycriu.process_edit.modify_binary_dynamic(directory, start_address, offset)
+
+def sli(opts):
+    vstr = ''
+    shared_library_name = opts['library_name']
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    for p in ps_img['entries']:
+        pid = get_task_id(p, 'pid')
+        vmas = pycriu.images.load(dinf(opts, 'mm-%d.img' %
+                                       pid))['entries'][0]['vmas']
+    for vma in vmas[0:]:
+        file_name = get_file_str(opts, {'type': 'REG_2', 'id': vma['shmid']})                       
+        if shared_library_name in file_name:
+            vstr += ' %08lx / %-8d' % (
+                        vma['start'], (vma['end'] - vma['start']) >> 12)
+            
+            prot = vma['prot'] & 0x1 and 'r' or '-'
+            prot += vma['prot'] & 0x2 and 'w' or '-'
+            prot += vma['prot'] & 0x4 and 'x' or '-'
+
+            astr = '%08lx-%08lx' % (vma['start'], vma['end'])
+            print("\t%-36s%s%s" % (astr, prot, file_name))
+
 
 def disasm(opts):
     directory=get_default_arg(opts, 'directory', "./")
@@ -179,6 +201,9 @@ def ftype_reg(opts, ft, fid):
     rf = ftype_find_in_image(opts, ft, fid, 'reg-files.img')
     return rf and rf['name'] or 'unknown path'
 
+def ftype_reg2(opts, ft, fid):
+    rf = ftype_find_in_image(opts, ft, fid, 'files.img')
+    return rf and rf['name'] or 'unknown path'
 
 def ftype_pipe(opts, ft, fid):
     p = ftype_find_in_image(opts, ft, fid, 'pipes.img')
@@ -209,6 +234,11 @@ file_types = {
         'get': ftype_unix,
         'img': None,
         'field': 'usk'
+    },
+    'REG_2': {
+        'get': ftype_reg2,
+        'img': None,
+        'field': 'reg'
     },
 }
 
@@ -415,7 +445,7 @@ def main():
     # Explore
     x_parser = subparsers.add_parser('x', help='explore image dir')
     x_parser.add_argument('dir')
-    x_parser.add_argument('what', choices=['ps', 'fds', 'mems', 'rss'])
+    x_parser.add_argument('what', choices=['ps', 'fds', 'mems', 'rss', 'sli'])
     x_parser.set_defaults(func=explore)
 
     # Show
@@ -448,6 +478,11 @@ def main():
     mbd_parser.add_argument('-sa','--startaddress', help='VMA start address')
     mbd_parser.add_argument('-off', '--offset', help='Offset of the location from the beginning of the shared library')
     mbd_parser.set_defaults(func=mbd, nopl=False)
+
+    shared_lib_info_parser = subparsers.add_parser('sli',help='Prints shared library info')
+    shared_lib_info_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
+    shared_lib_info_parser.add_argument('-name','--library_name', help='name of the shared library whose info is to be printed')
+    shared_lib_info_parser.set_defaults(func=sli, nopl=False)
 
     opts = vars(parser.parse_args())
 
