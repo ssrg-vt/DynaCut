@@ -117,6 +117,12 @@ bool should_dump_page(VmaEntry *vmae, u64 pme)
 	if (vma_entry_is(vmae, VMA_AREA_VVAR))
 		return false;
 
+	//Abhijit Mahurkar: Added option to dump FILE_PRIVATE regions
+	if (vma_entry_is(vmae, VMA_FILE_PRIVATE) && (pme & PME_FILE) && vma_entry_prot(vmae, PROT_EXEC))
+	{
+		pr_debug("AM: This is the new if \n");
+		return true;
+	}
 	/*
 	 * Optimisation for private mapping pages, that haven't
 	 * yet being COW-ed
@@ -124,7 +130,8 @@ bool should_dump_page(VmaEntry *vmae, u64 pme)
 	if (vma_entry_is(vmae, VMA_FILE_PRIVATE) && (pme & PME_FILE))
 		//return false;
 		//Abhijit Mahurkar: Changed to dump FILE_PRIVATE regions
-		return true;
+		return false;
+
 	if (vma_entry_is(vmae, VMA_AREA_AIORING))
 		return true;
 	if ((pme & (PME_PRESENT | PME_SWAP)) && !__page_is_zero(pme))
