@@ -77,6 +77,7 @@ def mbd(opts):
 
 def sli(opts):
     vstr = ''
+    flag = 0
     shared_library_name = opts['library_name']
     ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
     for p in ps_img['entries']:
@@ -95,6 +96,9 @@ def sli(opts):
 
             astr = '%08lx-%08lx' % (vma['start'], vma['end'])
             print("\t%-36s%s%s" % (astr, prot, file_name))
+            flag = 1
+    if not flag:
+            print("No matching vma entry found for: ", shared_library_name)
 
 
 def disasm(opts):
