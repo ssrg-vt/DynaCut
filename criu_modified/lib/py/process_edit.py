@@ -54,12 +54,12 @@ def modify_binary_dynamic(filepath, address, library_offset):
                          + (int(library_offset, 16) - mm_list_vmas[vmi]['pgoff'])
         pg_offset = pg_offset + (4096 * pages)
     
-    print('The offset in the pages-1.img is:', binary_offset, '(decimal)')
+    print("The offset in the pages-1.img is:", binary_offset, "(decimal)")
     # Modify binary
     with open(os.path.join(filepath, pages_file[0]), mode='r+b') as f:
         f.seek(binary_offset,0)
         bytes_data = f.read(1)
-        print('The data at the location is:', bytes_data.encode('hex'))
+        print("The data at the location is:", bytes_data.encode('hex'))
         f.seek(-1,1)
         f.write(b'\xCC')
 
