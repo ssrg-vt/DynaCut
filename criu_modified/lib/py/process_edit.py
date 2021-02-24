@@ -50,50 +50,16 @@ def modify_binary_dynamic(filepath, address, library_offset):
             if(key == "vaddr"):
                 map_address = pgmap_list[i][key]
                 if(map_address <= int(address, 16) < (map_address + pages * 4096)):
-                    print(mm_list_vmas[vmi]['pgoff'])
                     binary_offset = pg_offset + (int(address, 16) - map_address)\
                          + (int(library_offset, 16) - mm_list_vmas[vmi]['pgoff'])
-                    print(pg_offset)
         pg_offset = pg_offset + (4096 * pages)
     
-    print(binary_offset)
+    print('The offset in the pages-1.img is:', binary_offset, '(decimal)')
     # Modify binary
     with open(os.path.join(filepath, pages_file[0]), mode='r+b') as f:
         f.seek(binary_offset,0)
         bytes_data = f.read(1)
-        print(bytes_data.encode('hex'))
+        print('The data at the location is:', bytes_data.encode('hex'))
         f.seek(-1,1)
         f.write(b'\xCC')
-
-def shared_library_info(pgmap_list, mm_list, files_list):
-
-        print("%d" % pid)
-        vmi = 0
-        pvmi = -1
-        for pm in pms[1:]:
-            pstr = '\t%lx / %-8d' % (pm['vaddr'], pm['nr_pages'])
-            while vmas[vmi]['end'] <= pm['vaddr']:
-                vmi += 1
-
-            pme = pm['vaddr'] + (pm['nr_pages'] << 12)
-            vstr = ''
-            while vmas[vmi]['start'] < pme:
-                vma = vmas[vmi]
-                if vmi == pvmi:
-                    vstr += ' ~'
-                else:
-                    vstr += ' %08lx / %-8d' % (
-                        vma['start'], (vma['end'] - vma['start']) >> 12)
-                    if vma['status'] & ((1 << 6) | (1 << 7)):
-                        vstr += ' ' + get_file_str(opts, {
-                            'type': 'REG',
-                            'id': vma['shmid']
-                        })
-                    pvmi = vmi
-                vstr += '\n\t%23s' % ''
-                vmi += 1
-
-            vmi -= 1
-
-            print('%-24s%s' % (pstr, vstr))
 
