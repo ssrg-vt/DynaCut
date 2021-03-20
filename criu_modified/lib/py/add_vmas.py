@@ -13,7 +13,7 @@ import pycriu.utils
 
 class Addvmas:
     def __init__(self):
-		pass
+        pass
 
     # Function to create a MM payload with start and end address of VMA region
     def create_mm_payload(self, vaddr1, vaddr2):
@@ -93,7 +93,7 @@ def add_vma_regions(vaddr1, vaddr2, nr_pages, filepath):
 
     # Insert payload and sort the mm list
     # (CRIU needs the list to be sorted)
-    vma_list.insert(0, mm_payload)
+    vma_list.extend(0, mm_payload)
     new_vma_list = sorted(vma_list, key=itemgetter('start'))
 
     # Insert the modfied list into mm_img
@@ -106,7 +106,7 @@ def add_vma_regions(vaddr1, vaddr2, nr_pages, filepath):
     mm_img['entries'] = mm_list
 
     # Insert payload and sort the pgmap list
-    pgmap_list.insert(1, pgmap_payload)
+    pgmap_list.extend(1, pgmap_payload)
     new_pgmap_list = sorted(pgmap_list[1:], key=itemgetter('vaddr'))
 
     # Insert the first payload into the list

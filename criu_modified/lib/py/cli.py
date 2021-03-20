@@ -1,12 +1,17 @@
 from __future__ import print_function
+from __future__ import unicode_literals
+
 import argparse
-import sys
 import json
 import os
 import re
+import sys
+
 import pycriu
+import pycriu.add_sig_handler
 import pycriu.disasm_pages
 import pycriu.process_edit
+
 
 def inf(opts):
     if opts['in']:
@@ -74,32 +79,6 @@ def mbd(opts):
     if not offset:
         raise Exception("Offset address cannot be empty!")
     pycriu.process_edit.modify_binary_dynamic(directory, start_address, offset)
-
-def sli(opts):
-    vstr = ''
-    flag = 0
-    shared_library_name = opts['library_name']
-    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
-    for p in ps_img['entries']:
-        pid = get_task_id(p, 'pid')
-        vmas = pycriu.images.load(dinf(opts, 'mm-%d.img' %
-                                       pid))['entries'][0]['vmas']
-    for vma in vmas[0:]:
-        file_name = get_file_str(opts, {'type': 'REG_2', 'id': vma['shmid']})                       
-        if shared_library_name in file_name:
-            vstr += ' %08lx / %-8d' % (
-                        vma['start'], (vma['end'] - vma['start']) >> 12)
-            
-            prot = vma['prot'] & 0x1 and 'r' or '-'
-            prot += vma['prot'] & 0x2 and 'w' or '-'
-            prot += vma['prot'] & 0x4 and 'x' or '-'
-
-            astr = '%08lx-%08lx' % (vma['start'], vma['end'])
-            print("\t%-36s%s%s" % (astr, prot, file_name))
-            flag = 1
-    if not flag:
-            print("No matching vma entry found for: ", shared_library_name)
-
 
 def disasm(opts):
     directory=get_default_arg(opts, 'directory', "./")
@@ -238,12 +217,7 @@ file_types = {
         'get': ftype_unix,
         'img': None,
         'field': 'usk'
-    },
-    'REG_2': {
-        'get': ftype_reg2,
-        'img': None,
-        'field': 'reg'
-    },
+    }
 }
 
 
@@ -317,8 +291,8 @@ def explore_mems(opts):
                                  get_file_str(opts, {
                                      'type': 'REG',
                                      'id': mmi['exe_file_id']
+    
                                  })))
-
         for vma in mmi['vmas']:
             st = vma['status']
             if st & (1 << 10):
@@ -408,6 +382,67 @@ explorers = {
 def explore(opts):
     explorers[opts['what']](opts)
 
+def sli(opts):
+    vstr = ''
+    flag = 0
+    shared_library_name = opts['library_name']
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    for p in ps_img['entries']:
+        pid = get_task_id(p, 'pid')
+        vmas = pycriu.images.load(dinf(opts, 'mm-%d.img' %
+                                       pid))['entries'][0]['vmas']
+    for vma in vmas[0:]:
+        file_name = get_file_str(opts, {'type': 'REG', 'id': vma['shmid']})                       
+        if shared_library_name in file_name:
+            vma_address = vma['start']
+            vstr += ' %08lx / %-8d' % (
+                        vma['start'], (vma['end'] - vma['start']) >> 12)
+            
+            prot = vma['prot'] & 0x1 and 'r' or '-'
+            prot += vma['prot'] & 0x2 and 'w' or '-'
+            prot += vma['prot'] & 0x4 and 'x' or '-'
+
+            astr = '%08lx-%08lx' % (vma['start'], vma['end'])
+            print("\t%-36s%s%s" % (astr, prot, file_name))
+            flag = 1
+    if not flag:
+            print("No matching vma entry found for: ", shared_library_name)
+    return vma_address
+
+
+def find_libc_offset(opts):
+    vma_address = 0
+    flag = 0
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    with open(os.path.join(opts['dir'], 'files.img')) as ffile:
+        files_img = pycriu.images.load(ffile)['entries']
+    for p in ps_img['entries']:
+        pid = get_task_id(p, 'pid')
+        vmas = pycriu.images.load(dinf(opts, 'mm-%d.img' %
+                                       pid))['entries'][0]['vmas']
+    for vma in vmas[0:]:
+        for files in files_img:
+            if (files['id'] == vma['shmid']):
+                if(files['type'] == "REG"):
+                    file_name = files['reg']['name']
+                    if "libc" in file_name:
+                        vma_address = vma['start']
+                        print('The filename from find_library_offset is:', file_name, vma_address)
+                        return vma_address
+    return 0
+
+def add_sig_handler(opts):
+    filepath = opts['dir']
+    libpath = opts['lib_dir']
+    libname = opts['library_name']
+    handler_address = opts['handler_address']
+    restorer_address = opts['restorer_address']
+    vma_start_address = opts['vma_start_address']
+    vma_address = find_libc_offset(opts)
+    printf_address = int(opts['printf_address'], 16) + vma_address
+    exit_address = int(opts['exit_address'], 16) + vma_address
+    pycriu.add_sig_handler.add_signal_handler(filepath, libpath, libname, handler_address,\
+        restorer_address, vma_start_address, printf_address, exit_address)
 
 def main():
     desc = 'CRiu Image Tool'
@@ -487,6 +522,17 @@ def main():
     shared_lib_info_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
     shared_lib_info_parser.add_argument('-name','--library_name', help='name of the shared library whose info is to be printed')
     shared_lib_info_parser.set_defaults(func=sli, nopl=False)
+
+    add_sig_handler_parser = subparsers.add_parser('ash',help='Adds sig handler into process image')
+    add_sig_handler_parser.add_argument('-d','--dir', help='directory containing the CRIU images')
+    add_sig_handler_parser.add_argument('-dl','--lib_dir', help='Directory containing the library')
+    add_sig_handler_parser.add_argument('-name','--library_name', help='name of the shared library which is to be loaded into memory')
+    add_sig_handler_parser.add_argument('-ha','--handler_address', help='Address of the signal handler')
+    add_sig_handler_parser.add_argument('-ra','--restorer_address', help='Address of the restorer')
+    add_sig_handler_parser.add_argument('-vsa','--vma_start_address', help='VMA start address at which library has to be mapped')
+    add_sig_handler_parser.add_argument('-printa','--printf_address', help='Offset address of printf library function (TODO: Calculate Automatically')
+    add_sig_handler_parser.add_argument('-exita','--exit_address', help='Offset address of the exit library function (TODO: Calculate Automatically')
+    add_sig_handler_parser.set_defaults(func=add_sig_handler, nopl=False)
 
     opts = vars(parser.parse_args())
 
