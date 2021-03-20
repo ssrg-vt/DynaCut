@@ -7,7 +7,7 @@ import sys
 import json
 import os
 
-#from capstone import *
+from capstone import *
 import pycriu
 
 class Disasmpages:
