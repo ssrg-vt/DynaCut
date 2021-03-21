@@ -412,7 +412,6 @@ def sli(opts):
 
 def find_libc_offset(opts):
     vma_address = 0
-    flag = 0
     ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
     with open(os.path.join(opts['dir'], 'files.img')) as ffile:
         files_img = pycriu.images.load(ffile)['entries']
@@ -427,7 +426,6 @@ def find_libc_offset(opts):
                     file_name = files['reg']['name']
                     if "libc" in file_name:
                         vma_address = vma['start']
-                        print('The filename from find_library_offset is:', file_name, vma_address)
                         return vma_address
     return 0
 
@@ -438,11 +436,11 @@ def add_sig_handler(opts):
     handler_address = opts['handler_address']
     restorer_address = opts['restorer_address']
     vma_start_address = opts['vma_start_address']
-    vma_address = find_libc_offset(opts)
-    printf_address = int(opts['printf_address'], 16) + vma_address
-    exit_address = int(opts['exit_address'], 16) + vma_address
+    if((int(vma_start_address, 16) % 4096) != 0):
+        raise Exception("VMA start address is not 4k aligned")
+    library_address = find_libc_offset(opts)
     pycriu.add_sig_handler.add_signal_handler(filepath, libpath, libname, handler_address,\
-        restorer_address, vma_start_address, printf_address, exit_address)
+        restorer_address, vma_start_address, library_address)
 
 def main():
     desc = 'CRiu Image Tool'

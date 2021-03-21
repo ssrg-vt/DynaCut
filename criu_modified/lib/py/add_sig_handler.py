@@ -7,11 +7,11 @@ from __future__ import print_function
 
 import fnmatch
 import os
-import sys
 from operator import itemgetter
 import pycriu
 from elftools.elf.elffile import ELFFile
 import struct
+import json
 
 def page_start(x):
     page_mask = (~(4096 - 1))
@@ -185,10 +185,8 @@ def create_vmas(libpath, libname, start_address, file_id):
                 start_address = end_address
     return vma_list_mm, vma_list_pgmap
 
-def add_pages(filepath, libpath, libname,  num_pages, printf_address, exit_address):
-    #TODO: Calculate offset from .plt.sec
-    printf_plt_offset = 16408 #0x4018
-    exit_plt_offset = 16416 #0x4020
+def add_pages(filepath, libpath, libname,  num_pages, library_address):
+
     f_zeros = open(os.path.join(filepath, 'zeros'), 'wb+')
     f_zeros.write(b'\x00' * num_pages * 4096)
     with open(os.path.join(libpath, libname), 'rb') as f:
@@ -199,17 +197,24 @@ def add_pages(filepath, libpath, libname,  num_pages, printf_address, exit_addre
                 f_zeros.seek(address, 0)
                 f_zeros.write(segment.data())
     
-    f_zeros.seek(printf_plt_offset, 0)
-    f_zeros.write(struct.pack('<Q', printf_address))
-
-    f_zeros.seek(exit_plt_offset, 0)
-    f_zeros.write(struct.pack('<Q', exit_address))
+    with open(os.path.join(filepath, "plt-file.json")) as plt_file:
+        plt_data = json.load(plt_file)
+        plt_file_entries = plt_data['entries']
+    
+    for i in range(0, len(plt_file_entries)):
+        # IF condition checks whether entries in plt-file.json are valid
+        if(int(plt_file_entries[i]['libc_offset'], 16) != 0):
+            lib_address = int(plt_file_entries[i]['libc_offset'], 16) + library_address
+            if(int(plt_file_entries[i]['plt_address'], 16)!= 0):
+                plt_address = int(plt_file_entries[i]['plt_address'], 16)
+                f_zeros.seek(plt_address, 0)
+                f_zeros.write(struct.pack('<Q', lib_address))
 
     f_zeros.close()
 
-def modify_binary_image(filepath, libpath, libname, printf_address, exit_address):
+def modify_binary_image(filepath, libpath, libname, library_address):
     num_pages = calculate_num_pages(libpath, libname)
-    add_pages(filepath, libpath, libname, num_pages, printf_address, exit_address)
+    add_pages(filepath, libpath, libname, num_pages, library_address)
     return num_pages
 
 def dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath):
@@ -230,12 +235,11 @@ def append_at_location(pgmap_list, start_address):
                 map_address = pgmap_list[i][key]
                 if(int(start_address, 16) <= map_address < (map_address + pages * 4096)):
                     binary_offset = pg_offset
-                    print('The binary offset is:', binary_offset)
                     return binary_offset
         pg_offset = pg_offset + (4096 * pages) 
 
 def add_signal_handler(filepath, libpath, libname, handler_address, restorer_address,\
-                                            vma_start_address, printf_address, exit_address):
+                                            vma_start_address, library_address):
 
     pgmap_file, mm_file, pages_file = pycriu.utils.open_files(filepath)
     pgmap_img, mm_img = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
@@ -246,16 +250,17 @@ def add_signal_handler(filepath, libpath, libname, handler_address, restorer_add
     file_id = modify_files_img(filepath, libpath, libname)
     modify_core_img(filepath, int(handler_address, 16), int(restorer_address, 16))
     vma_list_mm, vma_list_pgmap = create_vmas(libpath, libname, int(vma_start_address, 16), file_id)
-    num_pages = modify_binary_image(filepath, libpath, libname, printf_address, exit_address)
+    num_pages = modify_binary_image(filepath, libpath, libname, int(library_address))
 
     vma_list = mm_list[0]['vmas']
 
     copy_payload = pgmap_list[0]
+    
     # Insert payload and sort the mm list
     # (CRIU needs the list to be sorted)
+    
     vma_list.extend(vma_list_mm)
     new_vma_list = sorted(vma_list, key=itemgetter("start"))
-    print(new_vma_list)
 
     mm_img['entries'][0]['vmas'] = new_vma_list
 
@@ -264,7 +269,6 @@ def add_signal_handler(filepath, libpath, libname, handler_address, restorer_add
     new_pgmap_list = sorted(pgmap_list_extend, key=itemgetter("vaddr"))
 
     new_pgmap_list.insert(0,copy_payload)
-    print(new_pgmap_list)
     pgmap_img['entries'] = new_pgmap_list
 
     dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath)
@@ -288,11 +292,9 @@ def add_signal_handler(filepath, libpath, libname, handler_address, restorer_add
         myfile.seek(binary_offset + (num_pages * 4096), 0)
         myfile.write(file2.read())
 
-    # Delete original pages img without zeros
-    #os.remove(os.path.join(filepath, pages_file[0]))
-
-    # Rename zeros file to original file
-    #os.rename(os.path.join(filepath, "zeros"), os.path.join(filepath, pages_file[0]))
+    # Delete zeros and temp file
+    os.remove(os.path.join(filepath, 'zeros'))
+    os.remove(os.path.join(filepath, 'temp'))
 
     print('Done')
 
