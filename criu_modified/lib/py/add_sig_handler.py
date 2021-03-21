@@ -13,8 +13,6 @@ import pycriu
 from elftools.elf.elffile import ELFFile
 import struct
 
-sys.path[0:0] = ['.', '..']
-
 def page_start(x):
     page_mask = (~(4096 - 1))
     return (x & page_mask)
@@ -211,7 +209,8 @@ def add_pages(filepath, libpath, libname,  num_pages, printf_address, exit_addre
 
 def modify_binary_image(filepath, libpath, libname, printf_address, exit_address):
     num_pages = calculate_num_pages(libpath, libname)
-    modified_pages_file = add_pages(filepath, libpath, libname, num_pages, printf_address, exit_address)
+    add_pages(filepath, libpath, libname, num_pages, printf_address, exit_address)
+    return num_pages
 
 def dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath):
     
@@ -220,6 +219,20 @@ def dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath):
     
     with open(os.path.join(filepath, pgmap_file[0]), mode='rb+') as pgmap_file_write:
             pycriu.images.dump(pgmap_img, pgmap_file_write)
+
+def append_at_location(pgmap_list, start_address):
+    pg_offset = 0
+    binary_offset = 0
+    for i in range(1, len(pgmap_list)):
+        pages = pgmap_list[i]["nr_pages"]
+        for key in pgmap_list[i]:
+            if(key == "vaddr"):
+                map_address = pgmap_list[i][key]
+                if(int(start_address, 16) <= map_address < (map_address + pages * 4096)):
+                    binary_offset = pg_offset
+                    print('The binary offset is:', binary_offset)
+                    return binary_offset
+        pg_offset = pg_offset + (4096 * pages) 
 
 def add_signal_handler(filepath, libpath, libname, handler_address, restorer_address,\
                                             vma_start_address, printf_address, exit_address):
@@ -233,7 +246,7 @@ def add_signal_handler(filepath, libpath, libname, handler_address, restorer_add
     file_id = modify_files_img(filepath, libpath, libname)
     modify_core_img(filepath, int(handler_address, 16), int(restorer_address, 16))
     vma_list_mm, vma_list_pgmap = create_vmas(libpath, libname, int(vma_start_address, 16), file_id)
-    modify_binary_image(filepath, libpath, libname, printf_address, exit_address)
+    num_pages = modify_binary_image(filepath, libpath, libname, printf_address, exit_address)
 
     vma_list = mm_list[0]['vmas']
 
@@ -256,17 +269,30 @@ def add_signal_handler(filepath, libpath, libname, handler_address, restorer_add
 
     dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath)
 
-    # Append pages to pages-img 
+    binary_offset = append_at_location(pgmap_img['entries'], vma_start_address)
 
-    with open(os.path.join(filepath, "zeros"), "ab+") as myfile,\
-         open(os.path.join(filepath, pages_file[0]), "rb") as file2:
-            myfile.write(file2.read())
+    # Copy data from offset to temp file
+    with open(os.path.join(filepath, pages_file[0]), "rb") as pg_file,\
+         open(os.path.join(filepath, "temp"), "wb+") as temp:
+            pg_file.seek(binary_offset, 0)
+            temp.write(pg_file.read())
+
+    # Write pages to pages-img 
+    with open(os.path.join(filepath, "zeros"), "rb") as myfile,\
+         open(os.path.join(filepath, pages_file[0]), "rb+") as file2:
+            file2.seek(binary_offset)
+            file2.write(myfile.read())
+    
+    # Append zeros to the file
+    with open(os.path.join(filepath, pages_file[0]), "rb+") as myfile, open(os.path.join(filepath, "temp"), "rb") as file2:
+        myfile.seek(binary_offset + (num_pages * 4096), 0)
+        myfile.write(file2.read())
 
     # Delete original pages img without zeros
-    os.remove(os.path.join(filepath, pages_file[0]))
+    #os.remove(os.path.join(filepath, pages_file[0]))
 
     # Rename zeros file to original file
-    os.rename(os.path.join(filepath, "zeros"), os.path.join(filepath, pages_file[0]))
+    #os.rename(os.path.join(filepath, "zeros"), os.path.join(filepath, pages_file[0]))
 
     print('Done')
 
