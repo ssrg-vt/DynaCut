@@ -1,66 +1,43 @@
-[![master](https://travis-ci.org/checkpoint-restore/criu.svg?branch=master)](https://travis-ci.org/checkpoint-restore/criu)
-[![development](https://travis-ci.org/checkpoint-restore/criu.svg?branch=criu-dev)](https://travis-ci.org/checkpoint-restore/criu)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/55251ec7db28421da4481fc7c1cb0cee)](https://www.codacy.com/app/xemul/criu?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=xemul/criu&amp;utm_campaign=Badge_Grade)
-<p align="center"><img src="https://criu.org/w/images/1/1c/CRIU.svg" width="256px"/></p>
+# Testing Modifications to CRIU
 
-## CRIU -- A project to implement checkpoint/restore functionality for Linux
+This modified CRIU example has features to edit a process, add library pages to a process at any arbitrary VMA location (MOre examples can be found by running `crit -h` )
 
-CRIU (stands for Checkpoint and Restore in Userspace) is a utility to checkpoint/restore Linux tasks.
+## Pre-requisites to test modified CRIU
 
-Using this tool, you can freeze a running application (or part of it) and checkpoint 
-it to a hard drive as a collection of files. You can then use the files to restore and run the
-application from the point it was frozen at. The distinctive feature of the CRIU
-project is that it is mainly implemented in user space. There are some more projects
-doing C/R for Linux, and so far CRIU [appears to be](https://criu.org/Comparison_to_other_CR_projects) 
-the most feature-rich and up-to-date with the kernel.
+Apart from the packages needed by Vanilla CRIU, the following packages are required by modified CRIU:
+`pip install capstone`
+`pip install pyelftools`
 
-CRIU project is (almost) the never-ending story, because we have to always keep up with the
-Linux kernel supporting checkpoint and restore for all the features it provides. Thus we're
-looking for contributors of all kinds -- feedback, bug reports, testing, coding, writing, etc.
-Please refer to [CONTRIBUTING.md](CONTRIBUTING.md) if you would like to get involved.
+## Testing adding a signal handler to a process
 
-The project [started](https://criu.org/History) as the way to do live migration for OpenVZ
-Linux containers, but later grew to more sophisticated and flexible tool. It is currently 
-used by (integrated into) OpenVZ, LXC/LXD, Docker, and other software, project gets tremendous 
-help from the community, and its packages are included into many Linux distributions.
+To add a signal handler as a library to a process, the following steps need to be followed: 
 
-The project home is at http://criu.org. This wiki contains all the knowledge base for CRIU we have.
-Pages worth starting with are:
-- [Installation instructions](http://criu.org/Installation)
-- [A simple example of usage](http://criu.org/Simple_loop)
-- [Examples of more advanced usage](https://criu.org/Category:HOWTO)
-- Troubleshooting can be hard, some help can be found [here](https://criu.org/When_C/R_fails), [here](https://criu.org/What_cannot_be_checkpointed) and [here](https://criu.org/FAQ)
+1. Find any library functions needed by the shared library using the example script provided in /PopSnapshot/tools/scripts/find_print_exit.sh. This script can also be modified to find more library functions used by the shared library
 
-### Checkpoint and restore of simple loop process 
-[<p align="center"><img src="https://asciinema.org/a/232445.png" width="572px" height="412px"/></p>](https://asciinema.org/a/232445)
+2. The permission of the library needs to be 775 (Required by CRIU when restoring)
 
-## Advanced features
+3. An example handler library and Makefile is provided in /PopSnapshot/tests/handler_example
 
-As main usage for CRIU is live migration, there's a library for it called P.Haul. Also the
-project exposes two cool core features as standalone libraries. These are libcompel for parasite code 
-injection and libsoccr for TCP connections checkpoint-restore.
+4. Currently, all The PLT offsets used by the library and their corresponding offsets in libc need to be entered manually. 
 
-### Live migration
+The file plt-file.json in /PopSnapshot/tests has some entries filled for print and exit library functions for libc-2.31.so. 
 
-True [live migration](https://criu.org/Live_migration) using CRIU is possible, but doing
-all the steps by hands might be complicated. The [phaul sub-project](https://criu.org/P.Haul)
-provides a Go library that encapsulates most of the complexity. This library and the Go bindings
-for CRIU are stored in the [go-criu](https://github.com/checkpoint-restore/go-criu) repository.
+Add any extra entries according to the format provided and place the plt-file.json in the CRIU dump folder which is to be modified. The name has to be the same. 
 
+5. An example command for adding a signal handler is: 
 
-### Parasite code injection
+`sudo ~/SSRG/PopSnapshot/criu_modified/crit/crit ash -d . -dl /home/abhijit/criu-dump/elf_loader -name libhandler.so -ha 0x7f0000001139 -ra 0x7f5ace2c3210 -vsa 0x7f0000000000`
 
-In order to get state of the running process CRIU needs to make this process execute
-some code, that would fetch the required information. To make this happen without
-killing the application itself, CRIU uses the [parasite code injection](https://criu.org/Parasite_code)
-technique, which is also available as a standalone library called [libcompel](https://criu.org/Compel).
+In the example:
+    1. `-d .` points to the criu dump folder
+    2. `-dl /home/abhijit/criu-dump/elf_loader` points to the folder which contains the library to be loaded
+    3. `-name` is the name of the library that is to be loaded into the address space
+    4. `-ha` is the signal handler address (This is: vma_start_address + offset of function in library)
+    5. `-ra` is the signal restorer address
+    6. `-vsa` is the start address of the VMA region at which the library is to be mapped
 
-### TCP sockets checkpoint-restore
+6. An example process to which this signal handler has been added is located in /PopSnapshot/tests/criu-example
 
-One of the CRIU features is the ability to save and restore state of a TCP socket
-without breaking the connection. This functionality is considered to be useful by
-itself, and we have it available as the [libsoccr library](https://criu.org/Libsoccr).
+7. If using the example executable and the example handler library, the restorer address can be the same as the SIGINT restorer 
 
-## Licence
-
-The project is licensed under GPLv2 (though files sitting in the lib/ directory are LGPLv2.1).
+8. Currently this method only supports handling the SIGTRAP signal

@@ -391,23 +391,29 @@ def sli(opts):
         pid = get_task_id(p, 'pid')
         vmas = pycriu.images.load(dinf(opts, 'mm-%d.img' %
                                        pid))['entries'][0]['vmas']
+    
+    with open(os.path.join(opts['dir'], 'files.img')) as ffile:
+        files_img = pycriu.images.load(ffile)['entries']
+    
     for vma in vmas[0:]:
-        file_name = get_file_str(opts, {'type': 'REG', 'id': vma['shmid']})                       
-        if shared_library_name in file_name:
-            vma_address = vma['start']
-            vstr += ' %08lx / %-8d' % (
-                        vma['start'], (vma['end'] - vma['start']) >> 12)
-            
-            prot = vma['prot'] & 0x1 and 'r' or '-'
-            prot += vma['prot'] & 0x2 and 'w' or '-'
-            prot += vma['prot'] & 0x4 and 'x' or '-'
+        for files in files_img:
+            if (files['id'] == vma['shmid']):
+                if(files['type'] == "REG"):
+                    file_name = files['reg']['name']
+                    if shared_library_name in file_name:
+                        vma_address = vma['start']
+                        vstr += ' %08lx / %-8d' % (
+                                    vma['start'], (vma['end'] - vma['start']) >> 12)
+                        
+                        prot = vma['prot'] & 0x1 and 'r' or '-'
+                        prot += vma['prot'] & 0x2 and 'w' or '-'
+                        prot += vma['prot'] & 0x4 and 'x' or '-'
 
-            astr = '%08lx-%08lx' % (vma['start'], vma['end'])
-            print("\t%-36s%s%s" % (astr, prot, file_name))
-            flag = 1
+                        astr = '%08lx-%08lx' % (vma['start'], vma['end'])
+                        print("\t%-36s%s%s" % (astr, prot, file_name))
+                        flag = 1
     if not flag:
             print("No matching vma entry found for: ", shared_library_name)
-    return vma_address
 
 
 def find_libc_offset(opts):
