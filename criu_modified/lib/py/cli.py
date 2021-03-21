@@ -528,8 +528,6 @@ def main():
     add_sig_handler_parser.add_argument('-ha','--handler_address', help='Address of the signal handler')
     add_sig_handler_parser.add_argument('-ra','--restorer_address', help='Address of the restorer')
     add_sig_handler_parser.add_argument('-vsa','--vma_start_address', help='VMA start address at which library has to be mapped')
-    add_sig_handler_parser.add_argument('-printa','--printf_address', help='Offset address of printf library function (TODO: Calculate Automatically')
-    add_sig_handler_parser.add_argument('-exita','--exit_address', help='Offset address of the exit library function (TODO: Calculate Automatically')
     add_sig_handler_parser.set_defaults(func=add_sig_handler, nopl=False)
 
     opts = vars(parser.parse_args())
