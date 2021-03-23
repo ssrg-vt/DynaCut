@@ -14,6 +14,9 @@ int main()
         printf("%d \n", ++i);
     }
     asm("int3");
+    asm("int3");
+    asm("int3");
+    printf("You cannot see me unless you use some tricks :)\n");
     return 0;
 }
 

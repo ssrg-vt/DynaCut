@@ -1,6 +1,10 @@
-all:
-	gcc -Wall -g -o criu-example criu-example.c
-	gcc -Wall -g -o test test.c
+all: criu-example simple
+
+criu-example: criu-example.c
+	gcc -Wall -g -o $@ $<
+
+simple: simple.c
+	gcc -Wall -g -o $@ $<
 
 clean:
-	rm -rf *.o criu-example test
+	rm -rf *.o criu-example simple
