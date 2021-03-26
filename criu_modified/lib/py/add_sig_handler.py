@@ -12,6 +12,7 @@ import pycriu
 from elftools.elf.elffile import ELFFile
 import struct
 import json
+import sys
 
 def page_start(x):
     page_mask = (~(4096 - 1))
@@ -20,11 +21,11 @@ def page_start(x):
 def page_end(x):
     return page_start(x + (4096 - 1))
 
-def get_build_id(libpath, libname):
+def get_build_id(libpath):
     # N: Number of characters in HEX string to split
     n = 8
     build_id_list = []
-    with open(os.path.join(libpath, libname), 'rb') as f:
+    with open(libpath, 'rb') as f:
         elffile= ELFFile(f)
         for section in elffile.iter_sections():
              if(section.name == '.note.gnu.build-id'):
@@ -63,16 +64,16 @@ def create_new_file_object(libpath, build_id, id, size):
            }
     return payload
 
-def modify_files_img(filepath, libpath, libname):
-    build_id = get_build_id(libpath, libname)
-    size = os.stat(os.path.join(libpath, libname)).st_size
+def modify_files_img(filepath, libpath):
+    build_id = get_build_id(libpath)
+    size = os.stat(libpath).st_size
     id = 1
     with open(os.path.join(filepath, 'files.img'), mode = 'rb') as f:
         files_img = pycriu.images.load(f)
     file_list = files_img['entries']
     for files in file_list[0:]:
         id +=1
-    file_item = create_new_file_object(os.path.join(libpath, libname), build_id, id, size)
+    file_item = create_new_file_object(libpath, build_id, id, size)
     file_list.append(file_item)
     files_img['entries'] = file_list
 
@@ -108,10 +109,10 @@ def modify_core_img(filepath, handler_address, restorer_address):
     with open(os.path.join(filepath,core_file[0]), mode='rb+') as f:
         pycriu.images.dump(core_img, f)
 
-def calculate_num_pages(lib_path, libname):
+def calculate_num_pages(lib_path):
     min_vaddr = 65535 #UINTPTR_MAX
     max_vaddr = 0
-    with open(os.path.join(lib_path, libname), 'rb') as f:
+    with open(lib_path, 'rb') as f:
         elffile = ELFFile(f)
         for segment in elffile.iter_segments():
             if(segment.header.p_type == 'PT_LOAD'):
@@ -167,11 +168,11 @@ def create_prot_list(flags):
 
     return prot_list
 
-def create_vmas(libpath, libname, start_address, file_id):
+def create_vmas(libpath, start_address, file_id):
     vma_list_mm = []
     vma_list_pgmap = []
     vma_start = start_address
-    with open(os.path.join(libpath, libname), 'rb') as f:
+    with open(libpath, 'rb') as f:
         elffile = ELFFile(f)
         for segment in elffile.iter_segments():
             if(segment.header.p_type == 'PT_LOAD'):
@@ -185,17 +186,23 @@ def create_vmas(libpath, libname, start_address, file_id):
                 start_address = end_address
     return vma_list_mm, vma_list_pgmap
 
-def add_pages(filepath, libpath, libname,  num_pages, library_address):
+def add_pages(filepath, libpath,  num_pages, library_address):
 
     f_zeros = open(os.path.join(filepath, 'zeros'), 'wb+')
     f_zeros.write(b'\x00' * num_pages * 4096)
-    with open(os.path.join(libpath, libname), 'rb') as f:
+    with open(libpath, 'rb') as f:
         elffile = ELFFile(f)
         for segment in elffile.iter_segments():
             address = segment.header['p_vaddr']
             if(segment.header.p_type == 'PT_LOAD'):
                 f_zeros.seek(address, 0)
                 f_zeros.write(segment.data())
+                if(segment.header['p_flags'] == 5):
+                    data_size = segment.header['p_memsz']
+                    sigreturn_offset = address + data_size + 1
+                    #TODO: Add condition to check to page overflow
+                    f_zeros.seek(sigreturn_offset, 0)
+                    f_zeros.write(b'\x48\xc7\xc0\x0f\x00\x00\x00\x0f\x05')                   
     
     with open(os.path.join(filepath, "plt-file.json")) as plt_file:
         plt_data = json.load(plt_file)
@@ -211,11 +218,12 @@ def add_pages(filepath, libpath, libname,  num_pages, library_address):
                 f_zeros.write(struct.pack('<Q', lib_address))
 
     f_zeros.close()
+    return sigreturn_offset
 
-def modify_binary_image(filepath, libpath, libname, library_address):
-    num_pages = calculate_num_pages(libpath, libname)
-    add_pages(filepath, libpath, libname, num_pages, library_address)
-    return num_pages
+def modify_binary_image(filepath, libpath, library_address):
+    num_pages = calculate_num_pages(libpath)
+    sigreturn_offset = add_pages(filepath, libpath, num_pages, library_address)
+    return num_pages, sigreturn_offset
 
 def dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath):
     
@@ -238,7 +246,7 @@ def append_at_location(pgmap_list, start_address):
                     return binary_offset
         pg_offset = pg_offset + (4096 * pages) 
 
-def add_signal_handler(filepath, libpath, libname, handler_address, restorer_address,\
+def add_signal_handler(filepath, libpath, handler_address,\
                                             vma_start_address, library_address):
 
     pgmap_file, mm_file, pages_file = pycriu.utils.open_files(filepath)
@@ -247,10 +255,11 @@ def add_signal_handler(filepath, libpath, libname, handler_address, restorer_add
     pgmap_list = pgmap_img['entries']
     mm_list = mm_img['entries']
 
-    file_id = modify_files_img(filepath, libpath, libname)
-    modify_core_img(filepath, int(handler_address, 16), int(restorer_address, 16))
-    vma_list_mm, vma_list_pgmap = create_vmas(libpath, libname, int(vma_start_address, 16), file_id)
-    num_pages = modify_binary_image(filepath, libpath, libname, int(library_address))
+    file_id = modify_files_img(filepath, libpath)
+    vma_list_mm, vma_list_pgmap = create_vmas(libpath, int(vma_start_address, 16), file_id)
+    num_pages, sigreturn_offset = modify_binary_image(filepath, libpath, int(library_address))
+    sigreturn_address = sigreturn_offset + int(vma_start_address, 16)
+    modify_core_img(filepath, int(handler_address, 16), sigreturn_address)
 
     vma_list = mm_list[0]['vmas']
 

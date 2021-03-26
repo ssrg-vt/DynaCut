@@ -438,15 +438,13 @@ def find_libc_offset(opts):
 def add_sig_handler(opts):
     filepath = opts['dir']
     libpath = opts['lib_dir']
-    libname = opts['library_name']
     handler_address = opts['handler_address']
-    restorer_address = opts['restorer_address']
     vma_start_address = opts['vma_start_address']
     if((int(vma_start_address, 16) % 4096) != 0):
         raise Exception("VMA start address is not 4k aligned")
     library_address = find_libc_offset(opts)
-    pycriu.add_sig_handler.add_signal_handler(filepath, libpath, libname, handler_address,\
-        restorer_address, vma_start_address, library_address)
+    pycriu.add_sig_handler.add_signal_handler(filepath, libpath, handler_address,\
+                                                        vma_start_address, library_address)
 
 def main():
     desc = 'CRiu Image Tool'
@@ -529,10 +527,8 @@ def main():
 
     add_sig_handler_parser = subparsers.add_parser('ash',help='Adds sig handler into process image')
     add_sig_handler_parser.add_argument('-d','--dir', help='directory containing the CRIU images')
-    add_sig_handler_parser.add_argument('-dl','--lib_dir', help='Directory containing the library')
-    add_sig_handler_parser.add_argument('-name','--library_name', help='name of the shared library which is to be loaded into memory')
+    add_sig_handler_parser.add_argument('-dl','--lib_dir', help='Path to the library that is to be loaded')
     add_sig_handler_parser.add_argument('-ha','--handler_address', help='Address of the signal handler')
-    add_sig_handler_parser.add_argument('-ra','--restorer_address', help='Address of the restorer')
     add_sig_handler_parser.add_argument('-vsa','--vma_start_address', help='VMA start address at which library has to be mapped')
     add_sig_handler_parser.set_defaults(func=add_sig_handler, nopl=False)
 
