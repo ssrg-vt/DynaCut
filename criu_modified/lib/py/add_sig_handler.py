@@ -190,6 +190,9 @@ def add_pages(filepath, libpath,  num_pages, library_address):
 
     f_zeros = open(os.path.join(filepath, 'zeros'), 'wb+')
     f_zeros.write(b'\x00' * num_pages * 4096)
+
+    write_flag = 0
+    zeros_buf = b'\x00' * 9
     with open(libpath, 'rb') as f:
         elffile = ELFFile(f)
         for segment in elffile.iter_segments():
@@ -197,12 +200,21 @@ def add_pages(filepath, libpath,  num_pages, library_address):
             if(segment.header.p_type == 'PT_LOAD'):
                 f_zeros.seek(address, 0)
                 f_zeros.write(segment.data())
-                if(segment.header['p_flags'] == 5):
+                f_zeros.seek(0)
+
+                # To write the restorer code in the pages-1.img
+                if(segment.header['p_flags'] == 5 and (write_flag == 0)):
                     data_size = segment.header['p_memsz']
                     sigreturn_offset = address + data_size + 1
                     #TODO: Add condition to check to page overflow
                     f_zeros.seek(sigreturn_offset, 0)
-                    f_zeros.write(b'\x48\xc7\xc0\x0f\x00\x00\x00\x0f\x05')                   
+                    buf = f_zeros.read(9)
+                    if(buf == zeros_buf):
+                        # Check for page overflow
+                        if(page_end(sigreturn_offset + 9) == page_end(sigreturn_offset)):
+                            f_zeros.seek(sigreturn_offset, 0)
+                            f_zeros.write(b'\x48\xc7\xc0\x0f\x00\x00\x00\x0f\x05')
+                            write_flag = 1             
     
     with open(os.path.join(filepath, "plt-file.json")) as plt_file:
         plt_data = json.load(plt_file)
