@@ -1,4 +1,4 @@
-all: criu-example simple
+all: criu-example simple multi_path
 
 criu-example: criu-example.c
 	gcc -Wall -g -o $@ $<
@@ -6,5 +6,8 @@ criu-example: criu-example.c
 simple: simple.c
 	gcc -Wall -g -o $@ $<
 
+multi_path: multi_path.c
+	gcc -Wall -g -o $@ $<
+
 clean:
-	rm -rf *.o criu-example simple
+	rm -rf *.o criu-example simple multi_path
