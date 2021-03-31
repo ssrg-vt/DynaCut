@@ -38,10 +38,7 @@ def modify_binary_dynamic(filepath, address, library_offset):
     pgmap_img, mm_img = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
     pgmap_list = pgmap_img['entries']
     mm_list = mm_img['entries']
-    mm_list_vmas = mm_list[0]['vmas']
-    vmi = 0
-    while mm_list_vmas[vmi]["start"] < int(address, 16):
-        vmi+=1
+    trap_address = address + library_offset
     pg_offset = 0
     binary_offset = 0
     for i in range(1, len(pgmap_list)):
@@ -49,9 +46,9 @@ def modify_binary_dynamic(filepath, address, library_offset):
         for key in pgmap_list[i]:
             if(key == "vaddr"):
                 map_address = pgmap_list[i][key]
-                if(map_address <= int(address, 16) < (map_address + pages * 4096)):
-                    binary_offset = pg_offset + (int(address, 16) - map_address)\
-                         + (int(library_offset, 16) - mm_list_vmas[vmi]['pgoff'])
+                if(map_address <= trap_address < (map_address + pages * 4096)):
+                    binary_offset = pg_offset + (trap_address - map_address)
+                    print("The trap address is", trap_address)
         pg_offset = pg_offset + (4096 * pages)
     
     print("The offset in the pages-1.img is:", binary_offset, "(decimal)")

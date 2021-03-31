@@ -186,11 +186,11 @@ def create_vmas(libpath, start_address, file_id):
                 start_address = end_address
     return vma_list_mm, vma_list_pgmap
 
-def add_pages(filepath, libpath,  num_pages, library_address):
+def add_pages(filepath, libpath,  num_pages, library_address, trap_address, jump_address, jump_offset):
 
     f_zeros = open(os.path.join(filepath, 'zeros'), 'wb+')
     f_zeros.write(b'\x00' * num_pages * 4096)
-
+    offset_to_write = (jump_address - trap_address) - 1
     write_flag = 0
     zeros_buf = b'\x00' * 9
     with open(libpath, 'rb') as f:
@@ -219,7 +219,7 @@ def add_pages(filepath, libpath,  num_pages, library_address):
     with open(os.path.join(filepath, "plt-file.json")) as plt_file:
         plt_data = json.load(plt_file)
         plt_file_entries = plt_data['entries']
-    
+
     for i in range(0, len(plt_file_entries)):
         # IF condition checks whether entries in plt-file.json are valid
         if(int(plt_file_entries[i]['libc_offset'], 16) != 0):
@@ -228,13 +228,19 @@ def add_pages(filepath, libpath,  num_pages, library_address):
                 plt_address = int(plt_file_entries[i]['plt_address'], 16)
                 f_zeros.seek(plt_address, 0)
                 f_zeros.write(struct.pack('<Q', lib_address))
+    
+
+    # Write offset address to binary image
+    f_zeros.seek(int(jump_offset, 16), 0)
+    f_zeros.write(struct.pack('<q', offset_to_write))
 
     f_zeros.close()
     return sigreturn_offset
 
-def modify_binary_image(filepath, libpath, library_address):
+def modify_binary_image(filepath, libpath, library_address, trap_address, jump_address, jump_offset):
     num_pages = calculate_num_pages(libpath)
-    sigreturn_offset = add_pages(filepath, libpath, num_pages, library_address)
+    sigreturn_offset = add_pages(filepath, libpath, num_pages, library_address,\
+         trap_address, jump_address, jump_offset)
     return num_pages, sigreturn_offset
 
 def dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath):
@@ -259,7 +265,7 @@ def append_at_location(pgmap_list, start_address):
         pg_offset = pg_offset + (4096 * pages) 
 
 def add_signal_handler(filepath, libpath, handler_address,\
-                                            vma_start_address, library_address):
+                                            vma_start_address, library_address, trap_address, jump_address, jump_offset):
 
     pgmap_file, mm_file, pages_file = pycriu.utils.open_files(filepath)
     pgmap_img, mm_img = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
@@ -269,7 +275,8 @@ def add_signal_handler(filepath, libpath, handler_address,\
 
     file_id = modify_files_img(filepath, libpath)
     vma_list_mm, vma_list_pgmap = create_vmas(libpath, int(vma_start_address, 16), file_id)
-    num_pages, sigreturn_offset = modify_binary_image(filepath, libpath, int(library_address))
+    num_pages, sigreturn_offset = modify_binary_image(filepath, libpath, int(library_address),\
+         trap_address, jump_address, jump_offset)
     sigreturn_address = sigreturn_offset + int(vma_start_address, 16)
     modify_core_img(filepath, int(handler_address, 16), sigreturn_address)
 

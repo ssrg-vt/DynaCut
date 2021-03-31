@@ -78,7 +78,7 @@ def mbd(opts):
     offset=opts['offset']
     if not offset:
         raise Exception("Offset address cannot be empty!")
-    pycriu.process_edit.modify_binary_dynamic(directory, start_address, offset)
+    pycriu.process_edit.modify_binary_dynamic(directory, int(start_address, 16), int(offset, 16))
 
 def disasm(opts):
     directory=get_default_arg(opts, 'directory', "./")
@@ -416,7 +416,8 @@ def sli(opts):
             print("No matching vma entry found for: ", shared_library_name)
 
 
-def find_libc_offset(opts):
+# Find the base address of a library given the name 
+def find_lib_offset(opts, name):
     vma_address = 0
     ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
     with open(os.path.join(opts['dir'], 'files.img')) as ffile:
@@ -430,7 +431,7 @@ def find_libc_offset(opts):
             if (files['id'] == vma['shmid']):
                 if(files['type'] == "REG"):
                     file_name = files['reg']['name']
-                    if "libc" in file_name:
+                    if name in file_name:
                         vma_address = vma['start']
                         return vma_address
     return 0
@@ -440,11 +441,18 @@ def add_sig_handler(opts):
     libpath = opts['lib_dir']
     handler_address = opts['handler_address']
     vma_start_address = opts['vma_start_address']
+    trap_offset = opts['trap_offset']
+    jump_offset = opts['jump_offset']
+    write_offset = opts['write_address']
     if((int(vma_start_address, 16) % 4096) != 0):
         raise Exception("VMA start address is not 4k aligned")
-    library_address = find_libc_offset(opts)
+    library_address_libc = find_lib_offset(opts, "libc")
+    library_address_trap = find_lib_offset(opts, opts['library_name'])
+    trap_address = library_address_trap + int(trap_offset, 16)
+    jump_address = library_address_trap + int(jump_offset, 16)
+    pycriu.process_edit.modify_binary_dynamic(filepath, library_address_trap, int(trap_offset, 16))
     pycriu.add_sig_handler.add_signal_handler(filepath, libpath, handler_address,\
-                                                        vma_start_address, library_address)
+                                                        vma_start_address, library_address_libc, trap_address, jump_address, write_offset)
 
 def main():
     desc = 'CRiu Image Tool'
@@ -530,6 +538,10 @@ def main():
     add_sig_handler_parser.add_argument('-dl','--lib_dir', help='Path to the library that is to be loaded')
     add_sig_handler_parser.add_argument('-ha','--handler_address', help='Address of the signal handler')
     add_sig_handler_parser.add_argument('-vsa','--vma_start_address', help='VMA start address at which library has to be mapped')
+    add_sig_handler_parser.add_argument('-name','--library_name', help='Name of library where trap is to be inserted')
+    add_sig_handler_parser.add_argument('-off','--trap_offset', help='Offset in library where trap is to be inserted')
+    add_sig_handler_parser.add_argument('-ja','--jump_offset', help='Jump offset of RIP')
+    add_sig_handler_parser.add_argument('-offset','--write_address', help='File offset of the global variable in which jump offset has to be written')
     add_sig_handler_parser.set_defaults(func=add_sig_handler, nopl=False)
 
     opts = vars(parser.parse_args())
