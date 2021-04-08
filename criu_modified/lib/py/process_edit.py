@@ -1,12 +1,10 @@
 ### A python module to edit a process image
 ### Author: Abhijit Mahurkar
 
+from __future__ import print_function
 import pycriu 
 import pycriu.utils
 import os
-
-def dinf(opts, name):
-    return open(os.path.join(opts['dir'], name))
 
 def modify_binary(filepath, address):
     pgmap_file, mm_file, pages_file = pycriu.utils.open_files(filepath)
@@ -33,11 +31,11 @@ def modify_binary(filepath, address):
         f.seek(-1,1)
         f.write(b'\xCC')
 
+# Adds traps into the CRIU binary image
 def modify_binary_dynamic(filepath, address, library_offset):
     pgmap_file, mm_file, pages_file = pycriu.utils.open_files(filepath)
-    pgmap_img, mm_img = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
+    pgmap_img, _ = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
     pgmap_list = pgmap_img['entries']
-    mm_list = mm_img['entries']
     trap_address = address + library_offset
     pg_offset = 0
     binary_offset = 0

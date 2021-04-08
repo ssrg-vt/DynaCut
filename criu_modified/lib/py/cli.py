@@ -382,6 +382,7 @@ explorers = {
 def explore(opts):
     explorers[opts['what']](opts)
 
+# Print shared library info for a library
 def sli(opts):
     vstr = ''
     flag = 0
@@ -401,7 +402,6 @@ def sli(opts):
                 if(files['type'] == "REG"):
                     file_name = files['reg']['name']
                     if shared_library_name in file_name:
-                        vma_address = vma['start']
                         vstr += ' %08lx / %-8d' % (
                                     vma['start'], (vma['end'] - vma['start']) >> 12)
                         
@@ -414,7 +414,6 @@ def sli(opts):
                         flag = 1
     if not flag:
             print("No matching vma entry found for: ", shared_library_name)
-
 
 # Find the base address of a library given the name 
 def find_lib_offset(opts, name):
@@ -436,23 +435,26 @@ def find_lib_offset(opts, name):
                         return vma_address
     return 0
 
+# Driver function for config handler
+def config_handler(opts):
+    filepath = opts['dir']
+    jump_offset = opts['jump_offset']
+    library_address_trap = find_lib_offset(opts, opts['library_name'])
+    jump_address = library_address_trap + int(jump_offset, 16)
+    pycriu.add_sig_handler.config_add_sig_handler(filepath, library_address_trap, jump_address)
+
+# Driver function for add signal handler
 def add_sig_handler(opts):
     filepath = opts['dir']
     libpath = opts['lib_dir']
     handler_address = opts['handler_address']
     vma_start_address = opts['vma_start_address']
-    trap_offset = opts['trap_offset']
-    jump_offset = opts['jump_offset']
-    write_offset = opts['write_address']
+    
     if((int(vma_start_address, 16) % 4096) != 0):
         raise Exception("VMA start address is not 4k aligned")
-    library_address_libc = find_lib_offset(opts, "libc")
-    library_address_trap = find_lib_offset(opts, opts['library_name'])
-    trap_address = library_address_trap + int(trap_offset, 16)
-    jump_address = library_address_trap + int(jump_offset, 16)
-    pycriu.process_edit.modify_binary_dynamic(filepath, library_address_trap, int(trap_offset, 16))
+    library_address_libc = find_lib_offset(opts, "libc-2.31.so")
     pycriu.add_sig_handler.add_signal_handler(filepath, libpath, handler_address,\
-                                                        vma_start_address, library_address_libc, trap_address, jump_address, write_offset)
+                                                        vma_start_address, library_address_libc)
 
 def main():
     desc = 'CRiu Image Tool'
@@ -533,15 +535,18 @@ def main():
     shared_lib_info_parser.add_argument('-name','--library_name', help='name of the shared library whose info is to be printed')
     shared_lib_info_parser.set_defaults(func=sli, nopl=False)
 
+
+    config_parser = subparsers.add_parser('config',help='Configure the Dump for adding signal handler')
+    config_parser.add_argument('-d','--dir', help='directory containing the CRIU images')
+    config_parser.add_argument('-name','--library_name', help='Name of library where trap is to be inserted')
+    config_parser.add_argument('-ja','--jump_offset', help='Jump offset of RIP')
+    config_parser.set_defaults(func=config_handler, nopl=False)
+
     add_sig_handler_parser = subparsers.add_parser('ash',help='Adds sig handler into process image')
     add_sig_handler_parser.add_argument('-d','--dir', help='directory containing the CRIU images')
     add_sig_handler_parser.add_argument('-dl','--lib_dir', help='Path to the library that is to be loaded')
     add_sig_handler_parser.add_argument('-ha','--handler_address', help='Address of the signal handler')
     add_sig_handler_parser.add_argument('-vsa','--vma_start_address', help='VMA start address at which library has to be mapped')
-    add_sig_handler_parser.add_argument('-name','--library_name', help='Name of library where trap is to be inserted')
-    add_sig_handler_parser.add_argument('-off','--trap_offset', help='Offset in library where trap is to be inserted')
-    add_sig_handler_parser.add_argument('-ja','--jump_offset', help='Jump offset of RIP')
-    add_sig_handler_parser.add_argument('-offset','--write_address', help='File offset of the global variable in which jump offset has to be written')
     add_sig_handler_parser.set_defaults(func=add_sig_handler, nopl=False)
 
     opts = vars(parser.parse_args())

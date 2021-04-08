@@ -8,19 +8,26 @@ from __future__ import print_function
 import fnmatch
 import os
 from operator import itemgetter
+from os.path import sep
 import pycriu
+import pycriu.process_edit
 from elftools.elf.elffile import ELFFile
+from elftools.elf.elffile import DynamicSegment
 import struct
 import json
-import sys
 
+# Aligns the address given to the page start
 def page_start(x):
     page_mask = (~(4096 - 1))
     return (x & page_mask)
 
+# Aligns the address given to the page end
 def page_end(x):
     return page_start(x + (4096 - 1))
 
+# Creates the build ID for the file (library) that is to be loaded into the 
+# Address space
+ 
 def get_build_id(libpath):
     # N: Number of characters in HEX string to split
     n = 8
@@ -39,6 +46,8 @@ def get_build_id(libpath):
              build_id_list.append(int(str_little, 16))
         
     return build_id_list
+
+# Creates a new file object to insert into files.img
 
 def create_new_file_object(libpath, build_id, id, size):
     payload = {
@@ -64,6 +73,8 @@ def create_new_file_object(libpath, build_id, id, size):
            }
     return payload
 
+# Modify the files.img and insert the file object
+
 def modify_files_img(filepath, libpath):
     build_id = get_build_id(libpath)
     size = os.stat(libpath).st_size
@@ -81,6 +92,9 @@ def modify_files_img(filepath, libpath):
         pycriu.images.dump(files_img, f)
     
     return id
+
+# Add the SIGNAL info into core.img, including the restorer address and the 
+# handler address from the sighandler library
 
 def modify_core_img(filepath, handler_address, restorer_address):
     # Signal Number 5: SIGTRAP
@@ -109,6 +123,8 @@ def modify_core_img(filepath, handler_address, restorer_address):
     with open(os.path.join(filepath,core_file[0]), mode='rb+') as f:
         pycriu.images.dump(core_img, f)
 
+# Calculate the number of pages required for the sighandler library
+
 def calculate_num_pages(lib_path):
     min_vaddr = 65535 #UINTPTR_MAX
     max_vaddr = 0
@@ -126,6 +142,8 @@ def calculate_num_pages(lib_path):
 
     return ((max_vaddr - min_vaddr) / 4096)
 
+# Create the VMA item to be inserted into the MM image
+
 def create_vma_item(offset, start_address, end_address, prot_list, file_id):
         item =  {
                           "start": start_address,
@@ -140,6 +158,8 @@ def create_vma_item(offset, start_address, end_address, prot_list, file_id):
                 }
         return item
 
+# Create the pagemap item to be inserted into the PAGEMAP image
+
 def create_vma_item_pagemap(start_address, nr_pages):
     item =  {
                 "vaddr": start_address,
@@ -147,6 +167,8 @@ def create_vma_item_pagemap(start_address, nr_pages):
                 "flags": "PE_PRESENT"
             }
     return item
+
+# Utility function to create the protection flag list for a page
 
 def create_prot_list(flags):
     prot_list = ""
@@ -168,6 +190,8 @@ def create_prot_list(flags):
 
     return prot_list
 
+# Add the VMAs into the MM mage and the PAGEMAP image
+
 def create_vmas(libpath, start_address, file_id):
     vma_list_mm = []
     vma_list_pgmap = []
@@ -186,11 +210,12 @@ def create_vmas(libpath, start_address, file_id):
                 start_address = end_address
     return vma_list_mm, vma_list_pgmap
 
-def add_pages(filepath, libpath,  num_pages, library_address, trap_address, jump_address, jump_offset):
+# Create the pages for the virtual region
+
+def add_pages(filepath, libpath,  num_pages, library_address, vma_start_address):
 
     f_zeros = open(os.path.join(filepath, 'zeros'), 'wb+')
     f_zeros.write(b'\x00' * num_pages * 4096)
-    offset_to_write = (jump_address - trap_address) - 1
     write_flag = 0
     zeros_buf = b'\x00' * 9
     with open(libpath, 'rb') as f:
@@ -214,8 +239,32 @@ def add_pages(filepath, libpath,  num_pages, library_address, trap_address, jump
                         if(page_end(sigreturn_offset + 9) == page_end(sigreturn_offset)):
                             f_zeros.seek(sigreturn_offset, 0)
                             f_zeros.write(b'\x48\xc7\xc0\x0f\x00\x00\x00\x0f\x05')
-                            write_flag = 1             
-    
+                            write_flag = 1
+        
+        # To perform global data relocations 
+        # Get the dynamic segment from the elf (to read DT_SYMTAB)
+        for segment in elffile.iter_segments():
+              if isinstance(segment, DynamicSegment):
+                  dynamic_segment = segment
+        reladyn_name = '.rela.dyn'
+        reladyn = elffile.get_section_by_name(reladyn_name)
+        # Get all relocations to be performed from the .rela.dyn section
+        for reloc in reladyn.iter_relocations():
+            # Get symbol index from relocation information
+            index = reloc['r_info_sym']
+            # Get type of relocation from relocation information
+            reloc_type = reloc['r_info_type']
+            # Get offset at which relocation has to be performed
+            symbol_offset = reloc['r_offset']
+            # Get symbol object from DT_SYMTAB section
+            symbol = dynamic_segment.get_symbol(index)
+            if(reloc_type == 6): #R_X86_64_GLOB_DAT
+                # Perform the relocation
+                address_to_write = symbol.entry['st_value'] + int(vma_start_address, 16)
+                f_zeros.seek(symbol_offset, 0)
+                f_zeros.write(struct.pack('<Q', address_to_write))
+            
+        
     with open(os.path.join(filepath, "plt-file.json")) as plt_file:
         plt_data = json.load(plt_file)
         plt_file_entries = plt_data['entries']
@@ -229,19 +278,17 @@ def add_pages(filepath, libpath,  num_pages, library_address, trap_address, jump
                 f_zeros.seek(plt_address, 0)
                 f_zeros.write(struct.pack('<Q', lib_address))
     
-
-    # Write offset address to binary image
-    f_zeros.seek(int(jump_offset, 16), 0)
-    f_zeros.write(struct.pack('<q', offset_to_write))
-
     f_zeros.close()
     return sigreturn_offset
 
-def modify_binary_image(filepath, libpath, library_address, trap_address, jump_address, jump_offset):
+# Utility function that calls other functions to modify the binary image of dump
+
+def modify_binary_image(filepath, libpath, library_address, vma_start_address):
     num_pages = calculate_num_pages(libpath)
-    sigreturn_offset = add_pages(filepath, libpath, num_pages, library_address,\
-         trap_address, jump_address, jump_offset)
+    sigreturn_offset = add_pages(filepath, libpath, num_pages, library_address, vma_start_address)
     return num_pages, sigreturn_offset
+
+# Dump the modfied images back to the dump files
 
 def dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath):
     
@@ -250,6 +297,8 @@ def dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath):
     
     with open(os.path.join(filepath, pgmap_file[0]), mode='rb+') as pgmap_file_write:
             pycriu.images.dump(pgmap_img, pgmap_file_write)
+
+# Find the offset at which to add the pages of sighandler into the original dump
 
 def append_at_location(pgmap_list, start_address):
     pg_offset = 0
@@ -264,8 +313,34 @@ def append_at_location(pgmap_list, start_address):
                     return binary_offset
         pg_offset = pg_offset + (4096 * pages) 
 
+# Config handler adds trap in the target library and creates the config.h and config_base.h files
+
+def config_add_sig_handler(filepath, library_address_trap, jump_address):
+    config_list = ''
+    # Write offset address to header file
+    with open(os.path.join(filepath, 'config_base.h'), 'wb+') as config_base_file:
+        config_base_file.write(hex(library_address_trap))
+
+    with open(os.path.join(filepath, 'trap_locations')) as trap_locations_file:
+        trap_contents = trap_locations_file.read()
+        contents_list = trap_contents.splitlines()
+    
+    for i in range(len(contents_list)):
+        trap_address = library_address_trap + int(contents_list[i], 16)
+        offset_to_write = (jump_address - trap_address) - 1
+        if i:
+            config_list+= ','
+        config_list += '{{ {0},{1} }}'.format(contents_list[i], offset_to_write)
+        #Add traps in the binary
+        pycriu.process_edit.modify_binary_dynamic(filepath, library_address_trap, int(contents_list[i], 16))
+    
+    with open(os.path.join(filepath, 'config.h'), 'wb+') as config_file:
+        config_file.write("%s" % config_list)
+
+# Main function to add signal handler into the original image 
+
 def add_signal_handler(filepath, libpath, handler_address,\
-                                            vma_start_address, library_address, trap_address, jump_address, jump_offset):
+                                            vma_start_address, library_address):
 
     pgmap_file, mm_file, pages_file = pycriu.utils.open_files(filepath)
     pgmap_img, mm_img = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
@@ -275,8 +350,7 @@ def add_signal_handler(filepath, libpath, handler_address,\
 
     file_id = modify_files_img(filepath, libpath)
     vma_list_mm, vma_list_pgmap = create_vmas(libpath, int(vma_start_address, 16), file_id)
-    num_pages, sigreturn_offset = modify_binary_image(filepath, libpath, int(library_address),\
-         trap_address, jump_address, jump_offset)
+    num_pages, sigreturn_offset = modify_binary_image(filepath, libpath, int(library_address), vma_start_address)
     sigreturn_address = sigreturn_offset + int(vma_start_address, 16)
     modify_core_img(filepath, int(handler_address, 16), sigreturn_address)
 
@@ -299,8 +373,10 @@ def add_signal_handler(filepath, libpath, handler_address,\
     new_pgmap_list.insert(0,copy_payload)
     pgmap_img['entries'] = new_pgmap_list
 
+    # Dump modified images
     dump_new_images(mm_img, pgmap_img, mm_file, pgmap_file, filepath)
 
+    # Calculate the position at which the signal handler pages need to be added
     binary_offset = append_at_location(pgmap_img['entries'], vma_start_address)
 
     # Copy data from offset to temp file
