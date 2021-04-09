@@ -4,11 +4,6 @@
             "name": "printf",
             "libc_offset":"0x64e10",
             "plt_address":"0x4018"
-        },
-        {
-            "name": "exit",
-            "libc_offset":"0x49bc0",
-            "plt_address":"0x4020"
         }
     ]
 }

@@ -1,6 +1,6 @@
 # Testing Modifications to CRIU
 
-This modified CRIU example has features to edit a process, add library pages to a process at any arbitrary VMA location (MOre examples can be found by running `crit -h` )
+This modified CRIU example has features to edit a process, add library pages to a process at any arbitrary VMA location (More examples can be found by running `crit -h` )
 
 ## Pre-requisites to test modified CRIU
 
@@ -30,12 +30,22 @@ Add any extra entries according to the format provided and place the plt-file.js
 
 8. Currently this method only supports handling the SIGTRAP signal
 
-## An example command: 
-`sudo ~/SSRG/PopSnapshot/criu_modified/crit/crit ash -d . -dl /home/abhijit/criu-dump/elf_loader -name libhandler.so -ha 0x7f0000001139 -ra 0x7f5ace2c3210 -vsa 0x7f0000000000`
+## Testing adding signal handler to Lighttpd and Multiple features removal
 
-1. `-d .` points to the criu dump folder.
-2. `-dl /home/abhijit/criu-dump/elf_loader` points to the folder which contains the library to be loaded.
-3. `-name` is the name of the library that is to be loaded into the address space.
-4. `-ha` is the signal handler address (This is: vma_start_address + offset of function in library).
-5. `-ra` is the signal restorer address.
-6. `-vsa` is the start address of the VMA region at which the library is to be mapped.
+1. Copy the modify_image script from /PopSnapshot/tools/scripts into a new folder
+
+2. Copy the plt_file.json from /PopSnapshot/tests (TODO: Support PLT relocations without this file)
+
+3. Copy the trap_locations file from /PopSnapshot/tests (This file has the trap locations for PUT and DELETE pre-filled)
+
+4. Copy the multi_sig_2.c file from /PopSnapshot/tests/handler_example (This is the shared library that will be loaded into lighttpd address space)
+
+5. Run the modify_image script with the following input:
+  - Name of the binary which to be modified (In this case, lighttpd)
+  - The dump directory location
+  - Path to the criu_modified folder
+  - **Full Path** to the folder that contains the multi_sig_2.c sig handler file
+
+6. Example command: 
+
+`./modify_image.sh lighttpd . ~/SSRG/PopSnapshot/criu_modified /home/abhijit/criu-dump/test_lighttpd_handler2/`

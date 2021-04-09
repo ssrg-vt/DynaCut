@@ -452,7 +452,7 @@ def add_sig_handler(opts):
     
     if((int(vma_start_address, 16) % 4096) != 0):
         raise Exception("VMA start address is not 4k aligned")
-    library_address_libc = find_lib_offset(opts, "libc-2.31.so")
+    library_address_libc = find_lib_offset(opts, "libc-")
     pycriu.add_sig_handler.add_signal_handler(filepath, libpath, handler_address,\
                                                         vma_start_address, library_address_libc)
 
