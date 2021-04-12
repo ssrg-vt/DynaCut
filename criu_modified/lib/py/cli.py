@@ -432,14 +432,14 @@ def find_lib_offset(opts, name):
                     file_name = files['reg']['name']
                     if name in file_name:
                         vma_address = vma['start']
-                        return vma_address
+                        return vma_address, file_name
     return 0
 
 # Driver function for config handler
 def config_handler(opts):
     filepath = opts['dir']
     jump_offset = opts['jump_offset']
-    library_address_trap = find_lib_offset(opts, opts['library_name'])
+    library_address_trap, _ = find_lib_offset(opts, opts['library_name'])
     jump_address = library_address_trap + int(jump_offset, 16)
     pycriu.add_sig_handler.config_add_sig_handler(filepath, library_address_trap, jump_address)
 
@@ -452,9 +452,9 @@ def add_sig_handler(opts):
     
     if((int(vma_start_address, 16) % 4096) != 0):
         raise Exception("VMA start address is not 4k aligned")
-    library_address_libc = find_lib_offset(opts, "libc-")
+    library_address_libc, libc_path = find_lib_offset(opts, "libc-")
     pycriu.add_sig_handler.add_signal_handler(filepath, libpath, handler_address,\
-                                                        vma_start_address, library_address_libc)
+                                                        vma_start_address, library_address_libc, libc_path)
 
 def main():
     desc = 'CRiu Image Tool'

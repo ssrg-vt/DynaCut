@@ -13,6 +13,7 @@ import pycriu
 import pycriu.process_edit
 from elftools.elf.elffile import ELFFile
 from elftools.elf.elffile import DynamicSegment
+from elftools.elf.elffile import GNUHashSection
 import struct
 import json
 
@@ -240,12 +241,21 @@ def add_pages(filepath, libpath,  num_pages, library_address, vma_start_address)
                             f_zeros.seek(sigreturn_offset, 0)
                             f_zeros.write(b'\x48\xc7\xc0\x0f\x00\x00\x00\x0f\x05')
                             write_flag = 1
-        
-        # To perform global data relocations 
+    
+    f_zeros.close()
+    return sigreturn_offset
+
+# To perform global data and PLT relocations
+
+def perform_relocations(libpath, filepath, vma_start_address, library_address, libc_path):
+    
+    f_zeros = open(os.path.join(filepath, 'zeros'), 'rb+')
+    with open(libpath, 'rb') as f:
+        elffile = ELFFile(f) 
         # Get the dynamic segment from the elf (to read DT_SYMTAB)
         for segment in elffile.iter_segments():
-              if isinstance(segment, DynamicSegment):
-                  dynamic_segment = segment
+                if isinstance(segment, DynamicSegment):
+                    dynamic_segment = segment
         reladyn_name = '.rela.dyn'
         reladyn = elffile.get_section_by_name(reladyn_name)
         # Get all relocations to be performed from the .rela.dyn section
@@ -263,29 +273,40 @@ def add_pages(filepath, libpath,  num_pages, library_address, vma_start_address)
                 address_to_write = symbol.entry['st_value'] + int(vma_start_address, 16)
                 f_zeros.seek(symbol_offset, 0)
                 f_zeros.write(struct.pack('<Q', address_to_write))
-            
-        
-    with open(os.path.join(filepath, "plt-file.json")) as plt_file:
-        plt_data = json.load(plt_file)
-        plt_file_entries = plt_data['entries']
-
-    for i in range(0, len(plt_file_entries)):
-        # IF condition checks whether entries in plt-file.json are valid
-        if(int(plt_file_entries[i]['libc_offset'], 16) != 0):
-            lib_address = int(plt_file_entries[i]['libc_offset'], 16) + library_address
-            if(int(plt_file_entries[i]['plt_address'], 16)!= 0):
-                plt_address = int(plt_file_entries[i]['plt_address'], 16)
-                f_zeros.seek(plt_address, 0)
-                f_zeros.write(struct.pack('<Q', lib_address))
+    
+        # Get the GNUHash section from libc
+        with open(libc_path, 'rb') as lib_f:
+            libelffile = ELFFile(lib_f)
+            for section in libelffile.iter_sections():
+                if isinstance(section, GNUHashSection):
+                    hash_section = section
+            # Get all relocations to be performed from the .rela.plt section
+            relaplt_name = '.rela.plt'
+            relaplt = elffile.get_section_by_name(relaplt_name)
+            for reloc in relaplt.iter_relocations():
+                index = reloc['r_info_sym']
+                # Get type of relocation from relocation information
+                reloc_type = reloc['r_info_type']
+                # Get offset at which relocation has to be performed
+                symbol_offset = reloc['r_offset']
+                # Get symbol object from DT_SYMTAB section
+                symbol = dynamic_segment.get_symbol(index)
+                if(reloc_type == 7): #R_X86_64_JUMP_SLO
+                    # Perform the relocation
+                    # Address to write calculation: Find the offset of the PLT function from the 
+                    # GNUHash section and add it to the base address of libc
+                    address_to_write = hash_section.get_symbol(symbol.name).entry['st_value'] + library_address
+                    f_zeros.seek(symbol_offset, 0)
+                    f_zeros.write(struct.pack('<Q', address_to_write))
     
     f_zeros.close()
-    return sigreturn_offset
 
 # Utility function that calls other functions to modify the binary image of dump
 
-def modify_binary_image(filepath, libpath, library_address, vma_start_address):
+def modify_binary_image(filepath, libpath, library_address, vma_start_address, libc_path):
     num_pages = calculate_num_pages(libpath)
     sigreturn_offset = add_pages(filepath, libpath, num_pages, library_address, vma_start_address)
+    perform_relocations(libpath, filepath, vma_start_address, library_address, libc_path)
     return num_pages, sigreturn_offset
 
 # Dump the modfied images back to the dump files
@@ -340,7 +361,7 @@ def config_add_sig_handler(filepath, library_address_trap, jump_address):
 # Main function to add signal handler into the original image 
 
 def add_signal_handler(filepath, libpath, handler_address,\
-                                            vma_start_address, library_address):
+                                            vma_start_address, library_address, libc_path):
 
     pgmap_file, mm_file, pages_file = pycriu.utils.open_files(filepath)
     pgmap_img, mm_img = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
@@ -350,7 +371,7 @@ def add_signal_handler(filepath, libpath, handler_address,\
 
     file_id = modify_files_img(filepath, libpath)
     vma_list_mm, vma_list_pgmap = create_vmas(libpath, int(vma_start_address, 16), file_id)
-    num_pages, sigreturn_offset = modify_binary_image(filepath, libpath, int(library_address), vma_start_address)
+    num_pages, sigreturn_offset = modify_binary_image(filepath, libpath, int(library_address), vma_start_address, libc_path)
     sigreturn_address = sigreturn_offset + int(vma_start_address, 16)
     modify_core_img(filepath, int(handler_address, 16), sigreturn_address)
 
