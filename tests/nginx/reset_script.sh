@@ -1,3 +1,3 @@
 #!/bin/bash
 
-sed -i 's/abhijit/usrname/g' nginx.conf
+sed -i 's/'$USER'/usrname/g' nginx.conf

@@ -1,3 +1,3 @@
 #!/bin/bash
 
-sed -i 's/abhijit/usrname/g' lighttpd.conf
+sed -i 's/'$USER'/usrname/g' lighttpd.conf
