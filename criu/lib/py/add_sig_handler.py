@@ -8,14 +8,11 @@ from __future__ import print_function
 import fnmatch
 import os
 from operator import itemgetter
-from os.path import sep
 import pycriu
 import pycriu.process_edit
 from elftools.elf.elffile import ELFFile
-from elftools.elf.elffile import DynamicSegment
-from elftools.elf.elffile import GNUHashSection
+from elftools.elf.elffile import DynamicSegment, GNUHashSection
 import struct
-import json
 
 # Aligns the address given to the page start
 def page_start(x):
@@ -97,14 +94,12 @@ def modify_files_img(filepath, libpath):
 # Add the SIGNAL info into core.img, including the restorer address and the 
 # handler address from the sighandler library
 
-def modify_core_img(filepath, handler_address, restorer_address):
+def modify_core_img(filepath, handler_address, restorer_address, pid):
     # Signal Number 5: SIGTRAP
     sig_id  = 5
 
-    core_file = fnmatch.filter(os.listdir(filepath), 'core-*.img')
-    
     # Open core file
-    with open(os.path.join(filepath,core_file[0]), mode='rb') as f:
+    with open(os.path.join(filepath,'core-%s.img' % pid), mode='rb') as f:
         core_img = pycriu.images.load(f)
     
     sigaction_list = core_img['entries'][0]['tc']['sigactions']
@@ -121,7 +116,7 @@ def modify_core_img(filepath, handler_address, restorer_address):
     sigaction_list[sig_id - 1] = sig_item
     core_img['entries'][0]['tc']['sigactions'] = sigaction_list
 
-    with open(os.path.join(filepath,core_file[0]), mode='rb+') as f:
+    with open(os.path.join(filepath,'core-%s.img' % pid), mode='rb+') as f:
         pycriu.images.dump(core_img, f)
 
 # Calculate the number of pages required for the sighandler library
@@ -213,7 +208,7 @@ def create_vmas(libpath, start_address, file_id):
 
 # Create the pages for the virtual region
 
-def add_pages(filepath, libpath,  num_pages, library_address, vma_start_address):
+def add_pages(filepath, libpath,  num_pages):
 
     f_zeros = open(os.path.join(filepath, 'zeros'), 'wb+')
     f_zeros.write(b'\x00' * num_pages * 4096)
@@ -305,7 +300,7 @@ def perform_relocations(libpath, filepath, vma_start_address, library_address, l
 
 def modify_binary_image(filepath, libpath, library_address, vma_start_address, libc_path):
     num_pages = calculate_num_pages(libpath)
-    sigreturn_offset = add_pages(filepath, libpath, num_pages, library_address, vma_start_address)
+    sigreturn_offset = add_pages(filepath, libpath, num_pages)
     perform_relocations(libpath, filepath, vma_start_address, library_address, libc_path)
     return num_pages, sigreturn_offset
 
@@ -336,7 +331,7 @@ def append_at_location(pgmap_list, start_address):
 
 # Config handler adds trap in the target library and creates the config.h and config_base.h files
 
-def config_add_sig_handler(filepath, library_address_trap, jump_address):
+def config_add_sig_handler(filepath, library_address_trap, jump_address, pid):
     config_list = ''
     # Write offset address to header file
     with open(os.path.join(filepath, 'config_base.h'), 'wb+') as config_base_file:
@@ -353,7 +348,7 @@ def config_add_sig_handler(filepath, library_address_trap, jump_address):
             config_list+= ','
         config_list += '{{ {0},{1} }}'.format(contents_list[i], offset_to_write)
         #Add traps in the binary
-        pycriu.process_edit.modify_binary_dynamic(filepath, library_address_trap, int(contents_list[i], 16))
+        pycriu.process_edit.modify_binary_dynamic(filepath, library_address_trap, int(contents_list[i], 16), pid)
     
     with open(os.path.join(filepath, 'config.h'), 'wb+') as config_file:
         config_file.write("%s" % config_list)
@@ -361,19 +356,21 @@ def config_add_sig_handler(filepath, library_address_trap, jump_address):
 # Main function to add signal handler into the original image 
 
 def add_signal_handler(filepath, libpath, handler_address,\
-                                            vma_start_address, library_address, libc_path):
+                                            vma_start_address, library_address, libc_path, pid):
 
-    pgmap_file, mm_file, pages_file = pycriu.utils.open_files(filepath)
+    pgmap_file, mm_file = pycriu.utils.open_files(filepath, pid)
     pgmap_img, mm_img = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
 
     pgmap_list = pgmap_img['entries']
     mm_list = mm_img['entries']
 
+    pages_id = pgmap_list[0]['pages_id']
+
     file_id = modify_files_img(filepath, libpath)
     vma_list_mm, vma_list_pgmap = create_vmas(libpath, int(vma_start_address, 16), file_id)
     num_pages, sigreturn_offset = modify_binary_image(filepath, libpath, int(library_address), vma_start_address, libc_path)
     sigreturn_address = sigreturn_offset + int(vma_start_address, 16)
-    modify_core_img(filepath, int(handler_address, 16), sigreturn_address)
+    modify_core_img(filepath, int(handler_address, 16), sigreturn_address, pid)
 
     vma_list = mm_list[0]['vmas']
 
@@ -401,19 +398,20 @@ def add_signal_handler(filepath, libpath, handler_address,\
     binary_offset = append_at_location(pgmap_img['entries'], vma_start_address)
 
     # Copy data from offset to temp file
-    with open(os.path.join(filepath, pages_file[0]), "rb") as pg_file,\
+    with open(os.path.join(filepath, 'pages-%s.img' % pages_id), mode='r+b') as pg_file,\
          open(os.path.join(filepath, "temp"), "wb+") as temp:
             pg_file.seek(binary_offset, 0)
             temp.write(pg_file.read())
 
     # Write pages to pages-img 
     with open(os.path.join(filepath, "zeros"), "rb") as myfile,\
-         open(os.path.join(filepath, pages_file[0]), "rb+") as file2:
+         open(os.path.join(filepath, 'pages-%s.img' % pages_id), mode='r+b') as file2:
             file2.seek(binary_offset)
             file2.write(myfile.read())
     
     # Append zeros to the file
-    with open(os.path.join(filepath, pages_file[0]), "rb+") as myfile, open(os.path.join(filepath, "temp"), "rb") as file2:
+    with open(os.path.join(filepath, 'pages-%s.img' % pages_id), mode='r+b') as myfile,\
+         open(os.path.join(filepath, "temp"), "rb") as file2:
         myfile.seek(binary_offset + (num_pages * 4096), 0)
         myfile.write(file2.read())
 

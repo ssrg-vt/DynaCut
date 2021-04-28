@@ -74,11 +74,14 @@ def mbd(opts):
     start_address=opts['startaddress']
     if not start_address:
         raise Exception("Start address cannot be empty!")
-    directory=get_default_arg(opts, 'directory', "./")
+    directory=get_default_arg(opts, 'dir', "./")
     offset=opts['offset']
     if not offset:
         raise Exception("Offset address cannot be empty!")
-    pycriu.process_edit.modify_binary_dynamic(directory, int(start_address, 16), int(offset, 16))
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    for p in ps_img['entries']:
+        #if(p['ppid'] != 0):
+        pycriu.process_edit.modify_binary_dynamic(directory, int(start_address, 16), int(offset, 16), get_task_id(p, 'pid'))
 
 def disasm(opts):
     directory=get_default_arg(opts, 'directory', "./")
@@ -438,10 +441,13 @@ def find_lib_offset(opts, name):
 # Driver function for config handler
 def config_handler(opts):
     filepath = opts['dir']
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
     jump_offset = opts['jump_offset']
     library_address_trap, _ = find_lib_offset(opts, opts['library_name'])
     jump_address = library_address_trap + int(jump_offset, 16)
-    pycriu.add_sig_handler.config_add_sig_handler(filepath, library_address_trap, jump_address)
+    for p in ps_img['entries']:
+        #if(p['ppid'] != 0):
+        pycriu.add_sig_handler.config_add_sig_handler(filepath, library_address_trap, jump_address, get_task_id(p, 'pid'))
 
 # Driver function for add signal handler
 def add_sig_handler(opts):
@@ -450,11 +456,15 @@ def add_sig_handler(opts):
     handler_address = opts['handler_address']
     vma_start_address = opts['vma_start_address']
     
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
     if((int(vma_start_address, 16) % 4096) != 0):
         raise Exception("VMA start address is not 4k aligned")
     library_address_libc, libc_path = find_lib_offset(opts, "libc-")
-    pycriu.add_sig_handler.add_signal_handler(filepath, libpath, handler_address,\
-                                                        vma_start_address, library_address_libc, libc_path)
+    
+    for p in ps_img['entries']:
+        #if(p['ppid'] != 0):
+        pycriu.add_sig_handler.add_signal_handler(filepath, libpath, handler_address,\
+                                                        vma_start_address, library_address_libc, libc_path, get_task_id(p, 'pid'))
 
 def main():
     desc = 'CRiu Image Tool'
@@ -507,25 +517,25 @@ def main():
 
     # Add VMAs
     addvma_parser = subparsers.add_parser('addvma',help='Adds VMA sections to CRIU images')
-    addvma_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
+    addvma_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
     addvma_parser.add_argument('-sa','--startaddress', help='VMA start address (Default: 0x1000)')
     addvma_parser.add_argument('-ea','--endaddress', help='end address of VMA section (Default: 0x5000)')
     addvma_parser.set_defaults(func=addvma, nopl=False)
 
     #Disassemble binary
     disasm_parser = subparsers.add_parser('disasm',help='Disassembles code VMA sections in CRIU images')
-    disasm_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
+    disasm_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
     disasm_parser.set_defaults(func=disasm, nopl=False)
 
     #Modify Binary
     mb_parser = subparsers.add_parser('mb',help='Writes INT3 to the specified offset location')
-    mb_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
+    mb_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
     mb_parser.add_argument('-a','--address', help='Address to be modified')
     mb_parser.set_defaults(func=mb, nopl=False)
 
     #Modify Binary Dynamic
     mbd_parser = subparsers.add_parser('mbd',help='Writes INT3 to the specified offset location for a dynamically linked binary')
-    mbd_parser.add_argument('-d','--directory', help='directory containing the images (local by default)')
+    mbd_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
     mbd_parser.add_argument('-sa','--startaddress', help='VMA start address')
     mbd_parser.add_argument('-off', '--offset', help='Offset of the location from the beginning of the shared library')
     mbd_parser.set_defaults(func=mbd, nopl=False)
