@@ -1,9 +1,0 @@
-{
-    "entries":[
-        {
-            "name": "printf",
-            "libc_offset":"0x64e10",
-            "plt_address":"0x4018"
-        }
-    ]
-}
