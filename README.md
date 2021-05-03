@@ -37,7 +37,7 @@ To install lighttpd and NGINX with webdav support, follow the below steps:
 
 4. The run script also starts up lighttpd/nginx from the configuration files provided in the folder
 
-## Testing adding signal handler to Lighttpd and Multiple features removal
+## Testing adding signal handler to Lighttpd and Multiple features removal (GCC 9.3.0 and Ubuntu 20.04)
 
 1. Copy the modify_image_lighttpd script from /PopSnapshot/tools/scripts into a new folder
 
@@ -55,7 +55,7 @@ To install lighttpd and NGINX with webdav support, follow the below steps:
 
 `./modify_image.sh lighttpd . ~/SSRG/PopSnapshot/criu /home/abhijit/criu-dump/test_lighttpd_handler2/`
 
-## Testing adding signal handler to NGINX and Multiple features removal
+## Testing adding signal handler to NGINX and Multiple features removal (GCC 9.3.0 and Ubuntu 20.04)
 
 1. Copy the modify_image_nginx script from /PopSnapshot/tools/scripts into a new folder
 
@@ -72,3 +72,17 @@ To install lighttpd and NGINX with webdav support, follow the below steps:
 5. Example command: 
 
 `./modify_image.sh nginx . ~/SSRG/PopSnapshot/criu /home/abhijit/criu-dump/nginx-dump/`
+
+## CURL commands to test PUT, DELETE and GET
+
+1. GET: Gets the file hello-demo from the server if it's PUT there first
+
+`curl -v 'http://0.0.0.0:8888/webdav/hello-demo'` 
+
+2. PUT: PUTs the given file to the server. In this case, hello-demo
+
+`curl -v -H "Expect:" -T "hello-demo" 'http://0.0.0.0:8888/webdav/'`
+
+3. DELETE: DELETEs a file from the server. In this case, hello-demo, if it is PUT there first
+
+`curl -v -X "DELETE" 'http://0.0.0.0:8888/webdav/hello-demo'`
