@@ -16,7 +16,7 @@ sudo chown $USER:$(id -gn) vanilla-dump -R
 cp ./vanilla-dump/* .
 
 # Generate the configuration files for adding the sighandler
-$3/crit/crit config -d ./ -name "nginx" -ja 0x81adc
+$3/crit/crit config -d ./ -name "nginx" -ja 0xb594a
 
 # Compile the sighandler library with configuration
 gcc -shared -fPIC multi_sig_2.c -o multi_sig_2.so
