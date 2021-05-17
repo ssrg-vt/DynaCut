@@ -7,8 +7,12 @@
 #include <signal.h>
 #include <ucontext.h>
 
-#define OFFSET_MASK 	0xFFFUL
+#define OFFSET_MASK	0xFFFUL
 
+/**
+ * @brief config.h contains an array of tuples that indicate the unwanted code
+ * block location and the length (location, length).
+ */
 int trap_map[][2] = {
     #include "config.h"
 };
@@ -22,11 +26,12 @@ void trap_handler(int sig, siginfo_t *si, void* arg)
 
     printf("\n===%s===\nSignal #%d. arr_len %lu. rip: 0x%lx\n", __func__,
             sig, arr_len, rip);
+    /* The actual trap RIP == the first int3 location + 1. */
     for (i = 0; i < arr_len; i++) {
-        if ((rip & OFFSET_MASK) == trap_map[i][0]) {
-            printf("Found sig handler offset: 0x%x. rip: ++0x%x\n", trap_map[i][0],
-                trap_map[i][1]);
-            rip += trap_map[i][1];
+        if ((rip & OFFSET_MASK) == (trap_map[i][0] + 1)) {
+            printf("Found sig handler offset: 0x%x. rip: ++%d\n",
+                trap_map[i][0], trap_map[i][1]);
+            rip += (trap_map[i][1] - 1);
         }
     }
     context->uc_mcontext.gregs[REG_RIP] = rip;
@@ -35,8 +40,8 @@ void trap_handler(int sig, siginfo_t *si, void* arg)
 
 __attribute__((constructor)) void initFunc()
 {
-   	struct sigaction sa;
+    struct sigaction sa;
     sa.sa_sigaction = &trap_handler;
-	sa.sa_flags = SA_SIGINFO; /* Use sa_sigaction instead of sa_handler. */
-	sigaction(SIGTRAP, &sa, NULL);
+    sa.sa_flags = SA_SIGINFO; /* Use sa_sigaction instead of sa_handler. */
+    sigaction(SIGTRAP, &sa, NULL);
 }

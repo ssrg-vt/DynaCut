@@ -1,14 +1,79 @@
-# Testing Modifications to CRIU
+# Dynamic and Adaptive Code Customization with Process Rewriting
 
-This modified CRIU example has features to edit a process, add library pages to a process at any arbitrary VMA location (More examples can be found by running `crit -h` )
+This project aims to dynamically customize code of a running process. The major component is an extended CRIU/CRIT tool that can rewrite the saved process images.
+This repo contains a modified version of CRIU that can edit a process, disable code path, and insert library pages to a process at arbitrary VMA location.
 
-## Pre-requisites to test modified CRIU
+## Install pre-requisites, build CRIU and test examples
 
-Apart from the packages needed by Vanilla CRIU, the following packages are required by modified CRIU:
-`pip install capstone`
-`pip install pyelftools`
+Apart from [the packages needed by Vanilla CRIU](https://criu.org/Installation), the following packages are required:
+```
+❯ pip install capstone pyelftools
+```
 
-## Testing adding a signal handler to a process
+Once you installed all the required packages, build the CRIU with:
+```
+❯ make -C criu
+...
+  LINK     lib/c/libcriu.so
+  LINK     lib/c/libcriu.a
+  GEN      lib/py/images/magic.py
+```
+
+Build the toy application with:
+```
+❯ make -C tests/example multi_path
+```
+We inserted `int3` on multiple places in this toy application (`multi_path`). Each `int3` code block indicates an unwanted feature that we don't want to touch. To disable that feature dynamically, we checkpoint the running process with CRIU and use our tool to inject a signal handler that skips the `int3` code blocks.
+
+### Disable the `int3` code blocks with injected signal handler
+First, we need to indentify the unwanted code block locations. You can use
+`objdump -S <bin>` to find the `int3` code block location and the length. Fill
+the value pairs to `tests/sighandler/config.h`. The following is an example:
+```
+❯ cat tests/sighandler/config.h
+{0x229, 1}, {0x2265, 2}, {0x3b3, 3}
+```
+Next, build the signal handler:
+```
+❯ make -C tests/sighandler multi_path_sighandler
+```
+
+Now let's checkpoint a running process:
+```
+❯ ./tests/example/multi_path -n 7 &
+pid: 43585, cnt: 7
+1
+2
+3
+[1]    43585 killed     ./tests/example/multi_path -n 7
+❯ ./tools/scripts/dump.sh multi_path
+```
+The saved process image should be in `./vanilla-dump`.
+
+Use the CRIT tool to rewrite the process image:
+```
+❯ ./criu/crit/crit ash -d vanilla-dump -dl $(pwd)/tests/sighandler/multi_sig.so -ha 0x7000001159 -vsa 0x7000000000
+```
+
+Let's restore the modified process:
+```
+❯ ./tools/scripts/restore.sh vanilla-dump
+4 
+5 
+6 
+7 
+In function main, trap (int3) next ...
+
+===trap_handler===
+Signal #5. arr_len 3. rip: 0x55d3ece7e3b4
+Found sig handler offset: 0x3b3. rip: ++3
+Updated rip 0x55d3ece7e3b6
+===trap_handler===
+
+main: You cannot see me unless you use some tricks :)
+```
+
+## Example: adding a signal handler to a process
 
 To add a signal handler as a library to a process, the following steps need to be followed: 
 
