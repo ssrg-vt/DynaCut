@@ -50,6 +50,7 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
-tests/criu-example/multi_path
-tests/criu-example/criu-example
-tests/criu-example/simple
+tests/example/multi_path
+tests/example/criu-example
+tests/example/simple
+tags
