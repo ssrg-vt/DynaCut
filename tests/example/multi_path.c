@@ -5,6 +5,7 @@
 
 void func_path_a()
 {
+    printf("In function %s, trap (int3) next ...\n", __func__);
     asm("int3");
     printf("%s: You cannot see me unless you advance a correct value to RIP\n",
             __func__);
@@ -12,6 +13,7 @@ void func_path_a()
 
 void func_path_b()
 {
+    printf("In function %s, trap (int3) next ...\n", __func__);
     asm("int3");
     asm("int3");
     printf("%s: You cannot see me unless you advance a correct value to RIP\n",
@@ -41,7 +43,7 @@ int main(int argc, char *argv[])
             cnt = atoi(optarg);
             break;
         default: /* '?' */
-            fprintf(stderr, "Usage: %s [-c loop_cnt] [-a] [-b]\n",
+            fprintf(stderr, "Usage: %s [-n loop_cnt] [-a] [-b]\n",
                     argv[0]);
             exit(EXIT_FAILURE);
         }
@@ -55,6 +57,7 @@ int main(int argc, char *argv[])
         sleep(5);
         printf("%d \n", ++i);
     }
+    printf("In function %s, trap (int3) next ...\n", __func__);
     asm("int3");
     asm("int3");
     asm("int3");
