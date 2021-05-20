@@ -6,9 +6,9 @@ import pycriu
 import pycriu.utils
 import os
 
-def modify_binary(filepath, address):
-    pgmap_file, mm_file = pycriu.utils.open_files(filepath)
-    pgmap_img, _ = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
+def modify_binary(filepath, address, pid):
+    pgmap_file, mm_file = pycriu.utils.open_files(filepath, pid)
+    pgmap_img, _= pycriu.utils.readImages(pid, filepath)
     pgmap_list = pgmap_img['entries']
     pages_id = pgmap_list[0]['pages_id']
     pg_offset = 0
@@ -34,7 +34,7 @@ def modify_binary(filepath, address):
 # Adds traps into the CRIU binary image
 def modify_binary_dynamic(filepath, address, library_offset, pid):
     pgmap_file, mm_file = pycriu.utils.open_files(filepath, pid)
-    pgmap_img, _= pycriu.utils.readImages(pgmap_file, mm_file, filepath)
+    pgmap_img, _= pycriu.utils.readImages(pid, filepath)
     pgmap_list = pgmap_img['entries']
     pages_id = pgmap_list[0]['pages_id']
     trap_address = address + library_offset

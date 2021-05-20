@@ -68,8 +68,10 @@ def mb(opts):
     start_address=opts['address']
     if not start_address:
         raise Exception("Address cannot be empty!")
-    directory=get_default_arg(opts, 'directory', "./")
-    pycriu.process_edit.modify_binary(directory, start_address)
+    directory=get_default_arg(opts, 'dir', "./")
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    for p in ps_img['entries']:
+        pycriu.process_edit.modify_binary(directory, start_address, get_task_id(p, 'pid'))
 
 def mbd(opts):
     start_address=opts['startaddress']
