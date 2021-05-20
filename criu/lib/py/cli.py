@@ -11,6 +11,7 @@ import pycriu
 import pycriu.add_sig_handler
 import pycriu.disasm_pages
 import pycriu.process_edit
+import pycriu.remove_init
 
 
 def inf(opts):
@@ -80,8 +81,34 @@ def mbd(opts):
         raise Exception("Offset address cannot be empty!")
     ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
     for p in ps_img['entries']:
-        #if(p['ppid'] != 0):
         pycriu.process_edit.modify_binary_dynamic(directory, int(start_address, 16), int(offset, 16), get_task_id(p, 'pid'))
+
+def remove_init(opts):
+    start_address=opts['startaddress']
+    if not start_address:
+        raise Exception("Start address cannot be empty!")
+    directory=get_default_arg(opts, 'dir', "./")
+    offset=opts['offset']
+    if not offset:
+        raise Exception("Offset address cannot be empty!")
+    size = opts['size']
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    for p in ps_img['entries']:
+        if(p['ppid'] == 0):
+            pycriu.remove_init.remove_init(directory, int(start_address, 16), int(offset, 16), get_task_id(p, 'pid'), int(size, 10))
+
+def remove_init_drio(opts):
+    start_address=opts['startaddress']
+    tracefile_path = opts['tracefile']
+    worker_tracefile_path = opts['tracefile_worker']
+    if not start_address:
+        raise Exception("Start address cannot be empty!")
+    directory=get_default_arg(opts, 'dir', "./")
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    for p in ps_img['entries']:
+        if(p['ppid'] == 0):
+            pycriu.remove_init.remove_init_drio(directory, int(start_address, 16), get_task_id(p, 'pid'), tracefile_path, worker_tracefile_path)
+
 
 def disasm(opts):
     directory=get_default_arg(opts, 'directory', "./")
@@ -546,8 +573,8 @@ def main():
     shared_lib_info_parser.set_defaults(func=sli, nopl=False)
 
 
-    config_parser = subparsers.add_parser('config',help='Configure the Dump for adding signal handler')
-    config_parser.add_argument('-d','--dir', help='directory containing the CRIU images')
+    config_parser = subparsers.add_parser('config',help='Configure thmp for adding signal handler')
+    config_parser.add_argument('-d','--dir', help='directory containing the Due CRIU images')
     config_parser.add_argument('-name','--library_name', help='Name of library where trap is to be inserted')
     config_parser.add_argument('-ja','--jump_offset', help='Jump offset of RIP')
     config_parser.set_defaults(func=config_handler, nopl=False)
@@ -558,6 +585,22 @@ def main():
     add_sig_handler_parser.add_argument('-ha','--handler_address', help='Address of the signal handler')
     add_sig_handler_parser.add_argument('-vsa','--vma_start_address', help='VMA start address at which library has to be mapped')
     add_sig_handler_parser.set_defaults(func=add_sig_handler, nopl=False)
+
+    # Remove init function
+    ri_parser = subparsers.add_parser('ri',help='Writes INT3\'s to the specified offset location for a dynamically linked binary')
+    ri_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
+    ri_parser.add_argument('-sa','--startaddress', help='VMA start address')
+    ri_parser.add_argument('-off', '--offset', help='Offset of the location from the beginning of the shared library')
+    ri_parser.add_argument('-size', '--size', help='Size of the function in bytes')
+    ri_parser.set_defaults(func=remove_init, nopl=False)
+
+    # Remove init function from DRIO trace
+    rid_parser = subparsers.add_parser('rid',help='Writes INT3\'s to the binary according to DRIO trace')
+    rid_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
+    rid_parser.add_argument('-sa','--startaddress', help='VMA start address')
+    rid_parser.add_argument('-tl','--tracefile', help='Path to the drio tracefile')
+    rid_parser.add_argument('-wtl','--tracefile_worker', help='Path to the drio worker tracefile')
+    rid_parser.set_defaults(func=remove_init_drio, nopl=False)
 
     opts = vars(parser.parse_args())
 

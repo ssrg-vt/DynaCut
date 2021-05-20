@@ -359,7 +359,7 @@ def add_signal_handler(filepath, libpath, handler_address,\
                                             vma_start_address, library_address, libc_path, pid):
 
     pgmap_file, mm_file = pycriu.utils.open_files(filepath, pid)
-    pgmap_img, mm_img = pycriu.utils.readImages(pgmap_file, mm_file, filepath)
+    pgmap_img, mm_img = pycriu.utils.readImages(pid, filepath)
 
     pgmap_list = pgmap_img['entries']
     mm_list = mm_img['entries']

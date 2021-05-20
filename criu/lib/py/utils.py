@@ -15,21 +15,17 @@ def open_files(filepath, pid):
 
     return pgmap_file, mm_file
 
-def readImages(pgmap_file, mm_file, filepath):
+def readImages(pid, filepath):
     """
     This function reads and returns the pgmap_img and mm_img 
     """
-    if not pgmap_file:
-        raise Exception("crit: addvma: no pagemap file found (empty dump folder?) \n")
-    if not mm_file:
-        raise Exception("crit: addvma: no mm image file found (empty dump folder?) \n")
 
     # Open PAGEMAP image
-    with open(os.path.join(filepath,pgmap_file[0]), mode='rb') as f:
+    with open(os.path.join(filepath, 'pagemap-%s.img' % pid), mode='r+b') as f:
         pgmap_img = pycriu.images.load(f)
 
     # Open MM image
-    with open(os.path.join(filepath,mm_file[0]), mode='rb') as f:
+    with open(os.path.join(filepath, 'mm-%s.img' % pid), mode='r+b') as f:
         mm_img = pycriu.images.load(f)
     
     return pgmap_img, mm_img
