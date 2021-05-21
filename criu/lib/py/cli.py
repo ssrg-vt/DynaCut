@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 
 import pycriu
@@ -55,6 +56,7 @@ def get_default_arg(opts, arg, default=""):
 	if opts[arg]:
 		return opts[arg]
 	return default
+
 def addvma(opts):
     start_address=get_default_arg(opts, 'startaddress', "0x1000")
     directory=get_default_arg(opts, 'directory', "./")
@@ -492,8 +494,74 @@ def add_sig_handler(opts):
     
     for p in ps_img['entries']:
         #if(p['ppid'] != 0):
-        pycriu.add_sig_handler.add_signal_handler(filepath, libpath, handler_address,\
+        pycriu.add_sig_handler.add_signal_handler(filepath, libpath, int(handler_address, 16),\
                                                         vma_start_address, library_address_libc, libc_path, get_task_id(p, 'pid'))
+
+# Process Edit functions
+# Insert sighandler.so into the process's address space
+# Use: ./criu/crit/crit edit insert sighandler <img dir> <VMA> -path $(pwd)/sig.so
+def pedit_insert_sighandler(opts):
+    process_img_dir = opts['dir']
+    sighandler_lib = opts['sighandler_path']    # optional in crit cmdline
+    vma_start_address = opts['addr']
+    if not sighandler_lib:
+        sys.stderr.write("crit: error: too few arguments (No sighandler path)")
+        sys.exit(1)
+
+    # Retrieve the handler address by adding the base VMA and the handler offset
+    nm = subprocess.Popen(["nm", opts['sighandler_path']], stdout=subprocess.PIPE)
+    grep = subprocess.Popen(["grep", "trap_handler"], stdin=nm.stdout, stdout=subprocess.PIPE)
+    result, _ = grep.communicate()
+    handler_offset = int(result.split()[0], 16)
+    handler_address = handler_offset + int(vma_start_address, 16)
+    print(int(vma_start_address, 16))
+    print("0x{:08x}".format(handler_offset + int(vma_start_address, 16)))
+    print("The entry function trap_handler() offset @0x{:x} VA @0x{:x} ({})".
+            format(handler_offset, handler_address, sighandler_lib))
+
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    if ((int(vma_start_address, 16) % 4096) != 0):
+        raise Exception("VMA start address is not 4k aligned")
+    library_address_libc, libc_path = find_lib_offset(opts, "libc-")
+
+    for p in ps_img['entries']:
+        #if(p['ppid'] != 0):
+        pycriu.add_sig_handler.add_signal_handler(process_img_dir,
+                    sighandler_lib, handler_address, vma_start_address,
+                    library_address_libc, libc_path, get_task_id(p, 'pid'))
+
+# Insert int3 at the addr
+# Use: ./criu/crit/crit edit insert int3 <img dir> <base> -offset <offset>
+def pedit_insert_int3(opts):
+    print(opts)
+    base = opts['addr']
+    process_img_dir = opts['dir']
+    offset = opts['offset']
+    if not offset:
+        sys.stderr.write("crit: error: too few arguments (offset cannot be empty)")
+        sys.exit(1)
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    for p in ps_img['entries']:
+        pycriu.process_edit.modify_binary_dynamic(process_img_dir,
+                int(base, 16), int(offset, 16), get_task_id(p, 'pid'))
+
+def pedit_insert(opts):
+    switcher = {
+        'sighandler': pedit_insert_sighandler,
+        'int3': pedit_insert_int3
+    }
+    switcher.get(opts['what'])(opts)
+
+def pedit_rm(opts):
+    print("TODO: choice rm not implemented yet.")
+    print(opts)
+
+def process_edit(opts):
+    switcher = {
+        'insert': pedit_insert,
+        'rm': pedit_rm
+    }
+    switcher.get(opts['choice'])(opts)
 
 def main():
     desc = 'CRiu Image Tool'
@@ -543,6 +611,17 @@ def main():
     show_parser.add_argument("in")
     show_parser.add_argument('--nopl',help='do not show entry payload (if exists)',action='store_true')
     show_parser.set_defaults(func=decode, pretty=True, out=None)
+
+    # Process Edit
+    edit_parser = subparsers.add_parser('edit', help="edit criu process images")
+    edit_parser.add_argument('choice', choices=['insert', 'rm'])
+    edit_parser.add_argument('what', choices=['sighandler', 'int3', 'pages'],
+        help='insert a \'signal handler\' or \'int3\'; remove pages')
+    edit_parser.add_argument('dir')
+    edit_parser.add_argument('addr', help='Address of the sighandler VMA, or the base VMA to replace int3')
+    edit_parser.add_argument('-path','--sighandler_path', help='Path to the signal handler (shared library) to be loaded')
+    edit_parser.add_argument('-offset', help='Offset in the binary')
+    edit_parser.set_defaults(func=process_edit)
 
     # Add VMAs
     addvma_parser = subparsers.add_parser('addvma',help='Adds VMA sections to CRIU images')
