@@ -10,9 +10,8 @@ void trap_handler(int sig, siginfo_t *si, void* arg)
 {
     ucontext_t *context = (ucontext_t *)arg;
     printf("The PID is %d", getpid());
-    printf("signal #%d. rip: 0x%llx\n", sig, context->uc_mcontext.gregs[REG_RIP] - 1);
+    printf("signal #%d. rip: 0x%llx\n", sig,
+	   context->uc_mcontext.gregs[REG_RIP]-1);
     printf("The signal is: %d\n", sig);
     exit(1);
-}   
-
-
+}

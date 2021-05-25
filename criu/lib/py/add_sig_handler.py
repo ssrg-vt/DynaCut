@@ -353,10 +353,9 @@ def config_add_sig_handler(filepath, library_address_trap, jump_address, pid):
     with open(os.path.join(filepath, 'config.h'), 'wb+') as config_file:
         config_file.write("%s" % config_list)
 
-# Main function to add signal handler into the original image 
-
+# Main function to add signal handler into the original image
 def add_signal_handler(filepath, libpath, handler_address,\
-                                            vma_start_address, library_address, libc_path, pid):
+                    vma_start_address, library_address, libc_path, pid):
 
     pgmap_file, mm_file = pycriu.utils.open_files(filepath, pid)
     pgmap_img, mm_img = pycriu.utils.readImages(pid, filepath)
@@ -370,7 +369,7 @@ def add_signal_handler(filepath, libpath, handler_address,\
     vma_list_mm, vma_list_pgmap = create_vmas(libpath, int(vma_start_address, 16), file_id)
     num_pages, sigreturn_offset = modify_binary_image(filepath, libpath, int(library_address), vma_start_address, libc_path)
     sigreturn_address = sigreturn_offset + int(vma_start_address, 16)
-    modify_core_img(filepath, int(handler_address, 16), sigreturn_address, pid)
+    modify_core_img(filepath, handler_address, sigreturn_address, pid)
 
     vma_list = mm_list[0]['vmas']
 
