@@ -1,7 +1,6 @@
-# Dynamic and Adaptive Code Customization with Process Rewriting
+# Instructions to build DynamoRIO tool
 
-## Instructions to build DynamoRIO tool
-
+Run the follwing command: 
 ```
 cmake -DDynamoRIO_DIR=/home/abhijit/SSRG/DynamoRIO-Linux-8.0.0-1/cmake ./
 ```
