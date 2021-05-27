@@ -194,4 +194,4 @@ endfunction (add_sample_standalone)
 configure_DynamoRIO_global(OFF ON)
 
 # Use ;-separated lists for source files and extensions.
-add_sample_client(bbcount     "bbcount.c;utils.c"       "drmgr;drreg;drx;drutil")
+add_sample_client(bbcount_DynaCut     "bbcount_DynaCut.c;utils.c"       "drmgr;drreg;drx;drutil")
