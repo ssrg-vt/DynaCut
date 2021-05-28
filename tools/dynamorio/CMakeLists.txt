@@ -193,5 +193,8 @@ endfunction (add_sample_standalone)
 # a function scope, we must set the global vars ahead of time:
 configure_DynamoRIO_global(OFF ON)
 
+LINK_DIRECTORIES(${CMAKE_BINARY_DIR})
+
 # Use ;-separated lists for source files and extensions.
 add_sample_client(bbcount_DynaCut     "bbcount_DynaCut.c;utils.c"       "drmgr;drreg;drx;drutil")
+TARGET_LINK_LIBRARIES(bbcount_DynaCut drcovlib)

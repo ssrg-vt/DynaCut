@@ -40,11 +40,13 @@
  */
 
 #include <stddef.h> /* for offsetof */
+#include <limits.h> /* for USHRT_MAX */
 #include "dr_api.h"
 #include "drmgr.h"
 #include "drreg.h"
 #include "drx.h"
 #include "utils.h"
+#include "drcovlib.h"
 
 #ifdef WINDOWS
 #    define DISPLAY_STRING(msg) dr_messagebox(msg)
@@ -67,16 +69,21 @@
     } while (0)
 
 #define HASH_TABLE_SIZE 7919
+#define UNKNOWN_MODULE_ID USHRT_MAX
 
 typedef struct node {
     int count;
     app_pc addr;
+    uint64 timestamp;
+    uint start;
+    ushort mod_id;
 } node_t;
 
 typedef node_t **hash_table_t;
 
 static client_id_t client_id;
 static int tls_idx;
+static uint64 timestamp_start = 0;
 
 /* thread private log file and hashtable */
 typedef struct {
@@ -85,13 +92,35 @@ typedef struct {
 } per_thread_t;
 
 static node_t *
-new_elem(app_pc addr, void *drcontext)
+new_elem(app_pc addr, void *drcontext, app_pc start)
 {
     node_t *elem = (node_t *)dr_thread_alloc(drcontext, sizeof(node_t));
     ASSERT(elem != NULL);
 
+    uint mod_id;
+    app_pc mod_start;
+
     elem-> count = 1;
     elem -> addr = addr;
+    elem -> timestamp = dr_get_microseconds() - timestamp_start;
+    drcovlib_status_t res = drmodtrack_lookup(drcontext, start, &mod_id, &mod_start);
+    if (res == DRCOVLIB_SUCCESS) {
+        if(!(mod_id < USHRT_MAX))
+            dr_fprintf(STDERR, "module id overflow");
+        elem->mod_id = (ushort)mod_id;
+        if(!(start > mod_start))
+            dr_fprintf(STDERR, "wrong module");
+        elem->start = (uint)(start - mod_start);
+    }
+    else {
+        /* XXX: we just truncate the address, which may have wrong value
+         * in x64 arch. It should be ok now since it is an unknown module,
+         * which will be ignored in the post-processing.
+         * Should be handled for JIT code in the future.
+         */
+        elem->mod_id = UNKNOWN_MODULE_ID;
+        elem->start = (uint)(ptr_uint_t)start;
+    }
 
     return elem;
 }
@@ -145,9 +174,9 @@ lookup(hash_table_t table, app_pc addr)
 }
 
 void
-insert(hash_table_t table, app_pc addr, void *drcontext)
+insert(hash_table_t table, app_pc addr, void *drcontext, app_pc start)
 {
-    node_t *elem = new_elem(addr, drcontext);
+    node_t *elem = new_elem(addr, drcontext, start);
 
     uint index = hash_func(addr);
     node_t *node = table[index];
@@ -185,12 +214,14 @@ event_thread_exit(void *drcontext)
     per_thread_t *data = (per_thread_t *)drmgr_get_tls_field(drcontext, tls_idx);
     /* Print all the hash table contents seen over the life of the process */
     int i;
+    drmodtrack_dump(data->log);
+    dr_fprintf(data -> log, "\n");
+    dr_fprintf(data->log, "BB Table: \n Module ID, BB addess, execution count, timestamp \n");
     hash_table_t table = data -> table;
-    dr_printf("Reached exit \n");
     for (i = 0; i < HASH_TABLE_SIZE; i++) {
         if (table[i] != NULL) {
             node_t *iter = table[i];
-                dr_fprintf(data -> log, "" PFX ": %d\n", iter->addr, iter -> count);
+                dr_fprintf(data -> log, "[%2hu] " PFX ": %5d timestamp: %5lu\n", iter-> mod_id, iter->start, iter -> count, iter-> timestamp);
         }
     }
     delete_table(table, drcontext);
@@ -221,6 +252,7 @@ event_exit(void)
 {
     if (!drmgr_unregister_tls_field(tls_idx))
         DR_ASSERT(false);
+    drmodtrack_exit();
     drx_exit();
     drreg_exit();
     drmgr_exit();
@@ -234,22 +266,24 @@ event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *inst
 if (!instr_is_app(instr))
     return DR_EMIT_DEFAULT;
 
-//dr_fprintf(STDERR, "event\n");
-    app_pc src;
+    app_pc tag_pc, start_pc, end_pc;
     node_t *elem;
     /* By default drmgr enables auto-predication, which predicates all instructions with
      * the predicate of the current instruction on ARM.
      * We disable it here because we want to unconditionally execute the following
      * instrumentation.
      */
+
+    tag_pc = dr_fragment_app_pc(tag);
+    start_pc = instr_get_app_pc(instrlist_first_app(bb));
     if (dr_using_all_private_caches()) {
     per_thread_t *data = (per_thread_t *)drmgr_get_tls_field(drcontext, tls_idx);
     hash_table_t table = data -> table;
-    src = instr_get_app_pc(instr);
-    elem = lookup(table, src);
+    //src = instr_get_app_pc(instr);
+    elem = lookup(table, start_pc);
 
     if (elem == NULL) {
-        insert(table, src, drcontext);
+        insert(table, start_pc, drcontext, tag_pc);
     }
     else {
             drx_insert_counter_update(drcontext, bb, instr,
@@ -258,6 +292,7 @@ if (!instr_is_app(instr))
                                */
                               SPILL_SLOT_MAX + 1,
                               IF_AARCHXX_(SPILL_SLOT_MAX + 1) & elem -> count, 1, 0);
+            elem -> timestamp = dr_get_microseconds() - timestamp_start;
     }
     }
     drmgr_disable_auto_predication(drcontext, bb);
@@ -289,6 +324,8 @@ if (!instr_is_app(instr))
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
+    drcovlib_status_t res;
+    timestamp_start = dr_get_microseconds();
     drreg_options_t ops = { sizeof(ops), 1 /*max slots needed: aflags*/, false };
     dr_set_client_name("DynamoRIO Sample Client 'bbcount'",
                        "http://dynamorio.org/issues");
@@ -308,7 +345,7 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     #ifdef UNIX
         dr_register_fork_init_event(event_fork);
     #endif
-
+    drmodtrack_init();
     dr_fprintf(STDERR, "Init done\n");
     /* make it easy to tell, by looking at log file, which client executed */
     dr_log(NULL, DR_LOG_ALL, 1, "Client 'bbcount' initializing\n");
