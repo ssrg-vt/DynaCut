@@ -68,15 +68,17 @@
         }                                                    \
     } while (0)
 
-#define HASH_TABLE_SIZE 7919
+#define HASH_TABLE_SIZE 10000
 #define UNKNOWN_MODULE_ID USHRT_MAX
 
 typedef struct node {
     int count;
     app_pc addr;
-    uint64 timestamp;
+    uint64 timestamp_first;
+    uint64 timestamp_last;
     uint start;
     ushort mod_id;
+    uint size;
 } node_t;
 
 typedef node_t **hash_table_t;
@@ -84,6 +86,7 @@ typedef node_t **hash_table_t;
 static client_id_t client_id;
 static int tls_idx;
 static uint64 timestamp_start = 0;
+static uint64 fork_timestamp = 0;
 
 /* thread private log file and hashtable */
 typedef struct {
@@ -92,7 +95,7 @@ typedef struct {
 } per_thread_t;
 
 static node_t *
-new_elem(app_pc addr, void *drcontext, app_pc start)
+new_elem(app_pc addr, void *drcontext, app_pc start, uint size)
 {
     node_t *elem = (node_t *)dr_thread_alloc(drcontext, sizeof(node_t));
     ASSERT(elem != NULL);
@@ -100,9 +103,10 @@ new_elem(app_pc addr, void *drcontext, app_pc start)
     uint mod_id;
     app_pc mod_start;
 
-    elem-> count = 1;
+    //elem-> count = 1;
     elem -> addr = addr;
-    elem -> timestamp = dr_get_microseconds() - timestamp_start;
+    elem -> timestamp_first = dr_get_microseconds() - timestamp_start;
+    elem -> size = size;
     drcovlib_status_t res = drmodtrack_lookup(drcontext, start, &mod_id, &mod_start);
     if (res == DRCOVLIB_SUCCESS) {
         if(!(mod_id < USHRT_MAX))
@@ -174,9 +178,9 @@ lookup(hash_table_t table, app_pc addr)
 }
 
 void
-insert(hash_table_t table, app_pc addr, void *drcontext, app_pc start)
+insert(hash_table_t table, app_pc addr, void *drcontext, app_pc start, uint size)
 {
-    node_t *elem = new_elem(addr, drcontext, start);
+    node_t *elem = new_elem(addr, drcontext, start, size);
 
     uint index = hash_func(addr);
     node_t *node = table[index];
@@ -216,12 +220,14 @@ event_thread_exit(void *drcontext)
     int i;
     drmodtrack_dump(data->log);
     dr_fprintf(data -> log, "\n");
-    dr_fprintf(data->log, "BB Table: \n Module ID, BB addess, execution count, timestamp \n");
+    dr_fprintf(data->log, "BB Table: Module ID, BB addess, size, execution count, timestamp \n");
     hash_table_t table = data -> table;
     for (i = 0; i < HASH_TABLE_SIZE; i++) {
         if (table[i] != NULL) {
             node_t *iter = table[i];
-                dr_fprintf(data -> log, "[%2hu] " PFX ": %5d timestamp: %5lu\n", iter-> mod_id, iter->start, iter -> count, iter-> timestamp);
+                dr_fprintf(data -> log, "[%2hu] " PFX ": %5d timestamp_first: %10lu timestamp_last: %10lu\n",\
+                 iter-> mod_id, iter->start, iter->size,\
+                 iter-> timestamp_first, iter-> timestamp_last);
         }
     }
     delete_table(table, drcontext);
@@ -233,6 +239,9 @@ static void
 event_fork(void *drcontext)
 {
     per_thread_t *data = drmgr_get_tls_field(drcontext, tls_idx);
+
+    fork_timestamp = dr_get_microseconds() - timestamp_start;
+    dr_fprintf(STDERR, "The fork timestamp is: %lu\n", fork_timestamp);
     if (data != NULL) {
         dr_close_file(data->log);
         if (drcontext == NULL) {
@@ -259,15 +268,17 @@ event_exit(void)
 }
 
 static dr_emit_flags_t
-event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *instr,
-                      bool for_trace, bool translating, void *user_data)
+event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, /*instr_t *instr ,*/
+                      bool for_trace, bool translating, OUT void **user_data)
 {
 /* ignore tool-inserted instrumentation */
-if (!instr_is_app(instr))
+if (translating)
     return DR_EMIT_DEFAULT;
 
     app_pc tag_pc, start_pc, end_pc;
     node_t *elem;
+    /* to find size */
+    instr_t *instr_iter;
     /* By default drmgr enables auto-predication, which predicates all instructions with
      * the predicate of the current instruction on ARM.
      * We disable it here because we want to unconditionally execute the following
@@ -282,22 +293,34 @@ if (!instr_is_app(instr))
     //src = instr_get_app_pc(instr);
     elem = lookup(table, start_pc);
 
+    end_pc = start_pc; /* for finding the size */
+    for (instr_iter = instrlist_first_app(bb); instr_iter != NULL;
+         instr_iter = instr_get_next_app(instr_iter)) {
+        app_pc pc = instr_get_app_pc(instr_iter);
+        int len = instr_length(drcontext, instr_iter);
+        /* -opt_speed (elision) is not supported */
+        /* For rep str expansion pc may be one back from start pc but equal to the tag. */
+        if(!(pc != NULL && (pc >= start_pc || pc == tag_pc)))
+               dr_printf("-opt_speed is not supported");
+        if (pc + len > end_pc)
+            end_pc = pc + len;
+    }
     if (elem == NULL) {
-        insert(table, start_pc, drcontext, tag_pc);
+        insert(table, start_pc, drcontext, tag_pc, (end_pc - start_pc));
     }
     else {
-            drx_insert_counter_update(drcontext, bb, instr,
-                              /* We're using drmgr, so these slots
-                               * here won't be used: drreg's slots will be.
-                               */
-                              SPILL_SLOT_MAX + 1,
-                              IF_AARCHXX_(SPILL_SLOT_MAX + 1) & elem -> count, 1, 0);
-            elem -> timestamp = dr_get_microseconds() - timestamp_start;
+        elem -> timestamp_last = dr_get_microseconds() - timestamp_start;
+            // drx_insert_counter_update(drcontext, bb, instr,
+            //                   /* We're using drmgr, so these slots
+            //                    * here won't be used: drreg's slots will be.
+            //                    */
+            //                   SPILL_SLOT_MAX + 1,
+            //                   IF_AARCHXX_(SPILL_SLOT_MAX + 1) & elem -> count, 1, 0);
     }
     }
-    drmgr_disable_auto_predication(drcontext, bb);
-    if (!drmgr_is_first_instr(drcontext, instr))
-        return DR_EMIT_DEFAULT;
+    // drmgr_disable_auto_predication(drcontext, bb);
+    // if (!drmgr_is_first_instr(drcontext, instr))
+    //     return DR_EMIT_DEFAULT;
 
 #ifdef VERBOSE
     dr_printf("in dynamorio_basic_block(tag=" PFX ")\n", tag);
@@ -339,7 +362,7 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     dr_register_exit_event(event_exit);
     if (!drmgr_register_thread_init_event(event_thread_init) ||
         !drmgr_register_thread_exit_event(event_thread_exit) ||
-        !drmgr_register_bb_instrumentation_event(NULL, event_app_instruction, NULL))
+        !drmgr_register_bb_instrumentation_event(event_app_instruction, NULL, NULL))
         DR_ASSERT(false);
     
     #ifdef UNIX

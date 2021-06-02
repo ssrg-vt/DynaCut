@@ -104,6 +104,8 @@ def remove_init(opts):
 def remove_init_drio(opts):
     start_address=opts['startaddress']
     tracefile_path = opts['tracefile']
+    name = opts['name']
+    init_point = opts['init_point']
     worker_tracefile_path = opts['tracefile_worker']
     if not start_address:
         raise Exception("Start address cannot be empty!")
@@ -111,7 +113,8 @@ def remove_init_drio(opts):
     ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
     for p in ps_img['entries']:
         if(p['ppid'] == 0):
-            pycriu.remove_init.remove_init_drio(directory, int(start_address, 16), get_task_id(p, 'pid'), tracefile_path, worker_tracefile_path)
+            pycriu.remove_init.remove_init_drio(directory, int(start_address, 16), get_task_id(p, 'pid'),\
+                 tracefile_path, name, init_point, worker_tracefile_path)
 
 
 def disasm(opts):
@@ -680,7 +683,9 @@ def main():
     rid_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
     rid_parser.add_argument('-sa','--startaddress', help='VMA start address')
     rid_parser.add_argument('-tl','--tracefile', help='Path to the drio tracefile')
-    rid_parser.add_argument('-wtl','--tracefile_worker', help='Path to the drio worker tracefile')
+    rid_parser.add_argument('-name','--name', help ='name of the binary (ex. nginx, lighttpd, SPEC)')
+    rid_parser.add_argument('-ip','--init_point', help ='init_point to be considered')
+    rid_parser.add_argument('-wtl','--tracefile_worker', help='Path to the drio worker tracefile (can be none)')
     rid_parser.set_defaults(func=remove_init_drio, nopl=False)
 
     opts = vars(parser.parse_args())
