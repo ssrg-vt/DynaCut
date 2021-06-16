@@ -500,9 +500,11 @@ def add_sig_handler(opts):
         pycriu.add_sig_handler.add_signal_handler(filepath, libpath, int(handler_address, 16),\
                                                         vma_start_address, library_address_libc, libc_path, get_task_id(p, 'pid'))
 
-# Process Edit functions
+# ===== Begin Process Editing functions =====
 # Insert sighandler.so into the process's address space
 # Use: ./criu/crit/crit edit insert sighandler <img dir> <VMA> -path $(pwd)/sig.so
+# Example: ./criu/crit/crit edit insert sighandler redis.img 0x1000000 \
+#           -path $(pwd)/tests/sighandler/libhandler.so
 def pedit_insert_sighandler(opts):
     process_img_dir = opts['dir']
     sighandler_lib = opts['sighandler_path']    # optional in crit cmdline
@@ -528,15 +530,14 @@ def pedit_insert_sighandler(opts):
     library_address_libc, libc_path = find_lib_offset(opts, "libc-")
 
     for p in ps_img['entries']:
-        #if(p['ppid'] != 0):
         pycriu.add_sig_handler.add_signal_handler(process_img_dir,
                     sighandler_lib, handler_address, vma_start_address,
                     library_address_libc, libc_path, get_task_id(p, 'pid'))
 
 # Insert int3 at the addr
-# Use: ./criu/crit/crit edit insert int3 <img dir> <base> -offset <offset>
+# Use: ./criu/crit/crit edit insert int3 <img dir> <base_addr> -offset <offset>
+# Example: ./criu/crit/crit edit insert int3 loop.img 0x555555554000 -offset 0x125d
 def pedit_insert_int3(opts):
-    print(opts)
     base = opts['addr']
     process_img_dir = opts['dir']
     offset = opts['offset']
@@ -547,6 +548,23 @@ def pedit_insert_int3(opts):
     for p in ps_img['entries']:
         pycriu.process_edit.modify_binary_dynamic(process_img_dir,
                 int(base, 16), int(offset, 16), get_task_id(p, 'pid'))
+
+# Update (modify) a single byte with the value.
+# Use: ./criu/crit/crit edit update byte <img dir> <base_addr> -offset <offset> -value <value>
+# Example: ./criu/crit/crit edit update byte loop.img 0x555555554000 -offset 0x125d -value 0x8b
+def pedit_update_byte(opts):
+    base = opts['addr']
+    process_img_dir = opts['dir']
+    offset = opts['offset']
+    value = opts['value']
+    if not offset:
+        sys.stderr.write("crit: error: too few arguments (offset cannot be empty)")
+        sys.exit(1)
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    for p in ps_img['entries']:
+        pycriu.process_edit.pedit_update_a_byte(process_img_dir,
+                int(base, 16), int(offset, 16), get_task_id(p, 'pid'), int(value,16))
+# ===== End Process Editing functions =====
 
 def pedit_insert(opts):
     switcher = {
@@ -559,10 +577,18 @@ def pedit_rm(opts):
     print("TODO: choice rm not implemented yet.")
     print(opts)
 
+def pedit_update(opts):
+    print(opts)
+    switcher = {
+        'byte': pedit_update_byte
+    }
+    switcher.get(opts['what'])(opts)
+
 def process_edit(opts):
     switcher = {
         'insert': pedit_insert,
-        'rm': pedit_rm
+        'rm': pedit_rm,
+        'update': pedit_update
     }
     switcher.get(opts['choice'])(opts)
 
@@ -617,13 +643,14 @@ def main():
 
     # Process Edit
     edit_parser = subparsers.add_parser('edit', help="edit criu process images")
-    edit_parser.add_argument('choice', choices=['insert', 'rm'])
-    edit_parser.add_argument('what', choices=['sighandler', 'int3', 'pages'],
+    edit_parser.add_argument('choice', choices=['insert', 'rm', 'update'])
+    edit_parser.add_argument('what', choices=['sighandler', 'int3', 'pages', 'byte'],
         help='insert a \'signal handler\' or \'int3\'; remove pages')
     edit_parser.add_argument('dir')
     edit_parser.add_argument('addr', help='Address of the sighandler VMA, or the base VMA to replace int3')
     edit_parser.add_argument('-path','--sighandler_path', help='Path to the signal handler (shared library) to be loaded')
     edit_parser.add_argument('-offset', help='Offset in the binary')
+    edit_parser.add_argument('-value', help='Value to be updated')
     edit_parser.set_defaults(func=process_edit)
 
     # Add VMAs
