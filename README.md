@@ -13,6 +13,7 @@ Table of Contents
       * [Find the basic blocks of the unwanted feature](#find-the-basic-blocks-of-the-unwanted-feature)
       * [Disable the unwanted feature by rewriting the CRIU process image](#disable-the-unwanted-feature-by-rewriting-the-criu-process-image)
       * [Test the correctness of dynamic feature removal](#test-the-correctness-of-dynamic-feature-removal)
+   * [Test removal of initialization functions](#To-test-init-feature-removal) 
    * [Dynamically remove the initialization code](#dynamically-remove-the-initialization-code)
    * [Example: adding a signal handler to a process](#example-adding-a-signal-handler-to-a-process)
    * [Installing Lighttpd and nginx](#installing-lighttpd-and-nginx)
