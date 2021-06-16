@@ -218,7 +218,6 @@ The PID is 159906. signal #5. rip: 0x5555555a2c71
 The signal is: 5
 ```
 
-<<<<<<< HEAD
 ### To test init feature removal 
 
 To remove initialization basic blocks, follow the below steps: 
@@ -257,9 +256,7 @@ Example:
 ```
 
 7. Upon restore, the application should run normally with the init functions removed. 
-=======
 ## Dynamically remove the initialization code
->>>>>>> 4afb1f50bb18a39fbd7c3c92766c6e02977a96ea
 
 ## Example: adding a signal handler to a process
 
