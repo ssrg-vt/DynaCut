@@ -9,5 +9,8 @@ simple: simple.c
 multi_path: multi_path.c
 	gcc -Wall -g -o $@ $<
 
+loop: stack_obj_func_loop.c
+	gcc -Wall -g -o $@ $<
+
 clean:
-	rm -rf *.o criu-example simple multi_path
+	rm -rf *.o criu-example simple multi_path loop
