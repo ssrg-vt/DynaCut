@@ -218,7 +218,7 @@ The PID is 159906. signal #5. rip: 0x5555555a2c71
 The signal is: 5
 ```
 
-### To test init feature removal 
+## To test init feature removal 
 
 To remove initialization basic blocks, follow the below steps: 
 
