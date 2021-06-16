@@ -4,64 +4,56 @@ import pycriu.utils
 import os
 import re
 import sys
+import json
+import struct
 
 from elftools.elf.elffile import ELFFile
-# Parses the DynamoRIO log and removes init functions from the master image given the init point
-def remove_init_drio(filepath, library_offset, pid, trace_filepath_master, name, init_point, trace_filepath_worker = None):
-    pgmap_img, _= pycriu.utils.readImages(pid, filepath)
+
+def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, init_point):
+    config_list_data = ''
+    config_list_address = ''
+    config_list_both = ''
+    # Write offset address to header file
+    with open(os.path.join(filepath, 'config_base.h'), 'wb+') as config_base_file:
+        config_base_file.write(hex(library_offset))
+
+    pgmap_img, mm_img = pycriu.utils.readImages(pid, filepath)
     pgmap_list = pgmap_img['entries']
+    mm_list = mm_img['entries'][0]
     pages_id = pgmap_list[0]['pages_id']
-    flag = False
     binary_offset = 0
     pg_offset = 0
-    bb_list = []
+    i = 0
+    new_bb_list = []
+    end = 0
 
-    f = open(trace_filepath_master, 'r')
-    content = f.readlines()
-    content = [x.strip() for x in content]
-    f.close()
-    if(trace_filepath_worker != None):
-        f_worker = open(trace_filepath_worker, 'r')
-        content_worker = f_worker.readlines()
-        content_worker = [x.strip() for x in content_worker]
-        f_worker.close()
-
-    for i in range(len(content)):
-        if name in content[i]:
-            i+=1
-            module_id = content[i].split(',')[0]
-            binary_path = content[i].split(', ')[6]
-            break
-    
+    binary_size = os.path.getsize(binary_path.strip())
+    print(binary_size)
     with open(binary_path.strip(), 'rb') as f:
         elffile = ELFFile(f)
         for section in elffile.iter_sections():
             if section.name.startswith('.text'):
                 text_section_start_address = section.header['sh_offset']
                 text_section_end_address = section.header['sh_offset'] + section.header['sh_size']
-    
-    for i in range(len(content)):
-        if "BB Table" in content[i]:
-            flag = True
-            i+=1
-        if flag == True:
-            m = re.findall(r"\[\s*\+?(-?\d+)\s*\]", content[i])
-            if str(module_id) in m:
-                split_line = re.split('\[\s*|:\s*|\]\s*|\s*',content[i])
-                #print(split_line)
-                bb_address = split_line[2]
-                bb_size = split_line[3]
-                first_timestamp = split_line[5]
-                latest_timestamp = split_line[7]
-                if(int(latest_timestamp) == 0):
-                    latest_timestamp = first_timestamp
-                list_elem = [bb_address, bb_size, int(latest_timestamp)]
-                bb_list.append(list_elem)
-    bb_list.sort(key = lambda x:x[2])
-    #print(bb_list)
 
-    for list_elem in bb_list:
-        if(list_elem[2] < int(init_point)):
+    # To add PROT_WRITE permission to executable segment of binary
+    for vma in mm_list['vmas']:
+        if (library_offset <= vma['start'] <= library_offset + binary_size):
+            if(vma['prot'] == 5):
+                print('found')
+                vma['prot'] = 7
+                break
+    
+    # Dump modified mm image
+    mm_img['entries'][0] = mm_list
+    _, mm_file = pycriu.utils.open_files(filepath, pid)
+    with open(mm_file[0], 'rb+') as mm_f:
+        pycriu.images.dump(mm_img, mm_f)
+    
+    bb_trace_int = [int(x[0],16) for x in bb_trace]
+    init_index = bb_trace_int.index(int(init_point, 16))
+    for list_elem in bb_trace:
+        if(bb_trace_int.index(int(list_elem[0], 16)) < init_index):
             if(text_section_start_address <= int(list_elem[0], 16) <= text_section_end_address):
                 trap_address = int(list_elem[0], 16) + library_offset
                 for j in range(1, len(pgmap_list)):
@@ -72,15 +64,101 @@ def remove_init_drio(filepath, library_offset, pid, trace_filepath_master, name,
                             if(map_address <= trap_address < (map_address + pages * 4096)):
                                 binary_offset = pg_offset + (trap_address - map_address)
                     pg_offset = pg_offset + (4096 * pages)
-                
-                print("The offset in the pages-1.img is:", binary_offset, "(decimal)", list_elem[0], list_elem[2])
+
                 # Modify binary
                 with open(os.path.join(filepath, 'pages-%s.img' % pages_id), mode='r+b') as f:
                     f.seek(binary_offset,0)
-                    f.seek(-1,1)
-                    f.write(b'\xCC' * int(list_elem[1]))
-                    binary_offset = 0
-                    pg_offset = 0
+                    bytes_data = f.read(1)
+                    if((bytes_data.encode('hex') == (b'\x90').encode('hex'))):
+                        print('Found the fffff')
+                        print(bytes_data.encode('hex'))
+                        config_list_data+=''
+                        config_list_address+=''
+                        binary_offset = 0
+                        pg_offset = 0
+                        i+=1
+                    else:
+                        new_bb_list.append(list_elem)
+                        print("The offset in the pages-1.img is:", binary_offset, "(decimal)", list_elem[0], list_elem[1])
+                        f.seek(-1,1)
+                        f.write(b'\xCC')
+                        binary_offset = 0
+                        pg_offset = 0
+                        if i:
+                            config_list_data+= ','
+                            config_list_address+= ','
+                            config_list_both+= ','
+                        config_list_data += '0x{0}'.format(bytes_data.encode('hex'))
+                        config_list_address += '{0}'.format(int(list_elem[0], 16))
+                        config_list_both += '{{ {0} , 0x{1} }}'.format(int(list_elem[0], 16),bytes_data.encode('hex'))
+                        i+=1
+    
+    with open(os.path.join(filepath, 'config_init_data.h'), 'wb+') as config_file:
+        config_file.write("%s" % config_list_data)
+    
+    with open(os.path.join(filepath, 'config_init_address.h'), 'wb+') as config_file:
+        config_file.write("%s" % config_list_address)
+
+    with open ("bb_list_original",'w+') as bb_file_original:
+        json.dump(bb_trace, bb_file_original)
+    
+    with open("bb_list_file", 'w+') as bb_file:
+        json.dump(new_bb_list, bb_file)
+
+# Parses the DynamoRIO log and removes init functions from the master image given the init point
+def remove_init_drio(filepath, library_offset, pid, init_trap_file):
+
+    pgmap_img, _= pycriu.utils.readImages(pid, filepath)
+    bb_trace = []
+    pgmap_list = pgmap_img['entries']
+    pages_id = pgmap_list[0]['pages_id']
+    binary_offset = 0
+    pg_offset = 0
+
+    with open("bb_list_file", 'r') as bb_file:
+        bb_trace = json.load(bb_file)
+    
+    with open("bb_list_original", 'r') as bb_file_original:
+        bb_trace_original = json.load(bb_file_original)
+
+    data_list = []
+    f = open(init_trap_file, 'rb')
+    f.seek(0,0)
+    while True:
+        try:
+            data_list.append(struct.unpack_from("<Q", f.read(8))[0])
+        except struct.error:
+            break
+    f.close()
+
+    print(data_list)
+    data_list = [(x - library_offset) for x in data_list]
+    bb_trace_int = [int(x[0], 16) for x in bb_trace_original]
+
+    for list_elem in bb_trace:
+        address_range = range((int(list_elem[0], 16) + 1),(int(list_elem[0], 16) + int(list_elem[1])))
+        address_list = list(address_range)
+        if(int(list_elem[0], 16) not in data_list and not(any(x in address_list for x in bb_trace_int))):
+            trap_address = int(list_elem[0], 16) + library_offset
+            for j in range(1, len(pgmap_list)):
+                pages = pgmap_list[j]["nr_pages"]
+                for key in pgmap_list[j]:
+                    if(key == "vaddr"):
+                        map_address = pgmap_list[j][key]
+                        if(map_address <= trap_address < (map_address + pages * 4096)):
+                            binary_offset = pg_offset + (trap_address - map_address)
+                pg_offset = pg_offset + (4096 * pages)
+            
+            print("This offset has been permanently removed at offset", binary_offset, "(decimal)", "file offset:",\
+                 list_elem[0], "size:", list_elem[1])
+            # Modify binary
+            with open(os.path.join(filepath, 'pages-%s.img' % pages_id), mode='r+b') as f:
+                f.seek(binary_offset,0)
+                f.write(b'\xCC'* int(list_elem[1]))
+                binary_offset = 0
+                pg_offset = 0
+        else:
+            print('Data not removed at file offset:', list_elem[0],"of size", list_elem[1])
 
 # Adds traps into the CRIU binary image
 def remove_init(filepath, address, library_offset, pid, size):
