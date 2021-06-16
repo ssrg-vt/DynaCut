@@ -230,9 +230,9 @@ Example:
 ❯ ./crit  config_init -d ./ -name "nginx" -input ~/master-thd.log ~/worker-thd.log -sa 0x5625441e8000 -ip 0x5baeb
 ```
 
-This command generates the `bb_list` file, which contains the list of the basic blocks where the trap has been inserted. It also generates a `bb_list_original` file, which contains the list of all the basic blocks of the application. The `bb_list_original` file is required to remove overlapping basic blocks. 
+This command generates the `bb_list_file` file, which contains the list of the basic blocks where the trap has been inserted. It also generates a `bb_list_original` file, which contains the list of all the basic blocks of the application. The `bb_list_original` file is required to remove overlapping basic blocks. 
 
-2. Compile the multi_sig_init.c file located in /PopSnapshot/tests/handler_example with the newly generated config_init_address.h and config_init_data.h files.
+2. Compile the multi_sig_init.c file located in /PopSnapshot/tests/sighandler with the newly generated config_init_address.h and config_init_data.h files. The best way to do this would be to copy the multi_sig_init.c file into the dump folder. 
 
 Example:
 ```
@@ -243,9 +243,9 @@ Example:
 
 Example:
 ```
-❯ ./crit ash -d ./ -ha 0x7f0000001199 -vsa 0x7f0000000000 -dl ~/criu-dump/lighty-init-new/multi_sig_init.so
+❯ ./crit ash -d ./ -ha 0x7f0000001199 -vsa 0x7f0000000000 -dl ./multi_sig_init.so
 ``` 
-4. Upon CRiU restore, a locations.txt file is generated in the folder from which lighty or NGINX was run. This locations.txt is the whitelist of all the basic that are used upon CRiU restore. 
+4. Upon CRiU restore, a locations.txt file is generated in the folder from which lighty or NGINX was run. This locations.txt is the whitelist of all the basic blocks that are used upon CRiU restore. 
 
 5. Reset the images to their vanilla version (Copy the vanilla files from the vanilla-dump folder)
 
@@ -253,10 +253,11 @@ Example:
 
 Example: 
 ```
-❯ ~/SSRG/PopSnapshot/criu/crit/crit rid -d ./ -sa 0x5625441e8000 -tf ~/SSRG/PopSnapshot/tests/nginx/locations.txt
+❯ ./crit rid -d ./ -sa 0x5625441e8000 -tf ./PopSnapshot/tests/nginx/locations.txt
 ```
 
 7. Upon restore, the application should run normally with the init functions removed. 
+
 ## Dynamically remove the initialization code
 
 ## Example: adding a signal handler to a process
