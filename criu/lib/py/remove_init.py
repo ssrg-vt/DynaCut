@@ -47,7 +47,7 @@ def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, ini
     # Dump modified mm image
     mm_img['entries'][0] = mm_list
     _, mm_file = pycriu.utils.open_files(filepath, pid)
-    with open(mm_file[0], 'rb+') as mm_f:
+    with open(os.path.join(filepath, mm_file[0]), mode='rb+') as mm_f:
         pycriu.images.dump(mm_img, mm_f)
     
     bb_trace_int = [int(x[0],16) for x in bb_trace]
