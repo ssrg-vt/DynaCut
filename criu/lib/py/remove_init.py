@@ -9,6 +9,10 @@ import struct
 
 from elftools.elf.elffile import ELFFile
 
+#Change to true to print
+
+DEBUG = False
+
 def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, init_point):
     config_list_data = ''
     config_list_address = ''
@@ -28,7 +32,6 @@ def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, ini
     end = 0
 
     binary_size = os.path.getsize(binary_path.strip())
-    print(binary_size)
     with open(binary_path.strip(), 'rb') as f:
         elffile = ELFFile(f)
         for section in elffile.iter_sections():
@@ -40,7 +43,6 @@ def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, ini
     for vma in mm_list['vmas']:
         if (library_offset <= vma['start'] <= library_offset + binary_size):
             if(vma['prot'] == 5):
-                print('found')
                 vma['prot'] = 7
                 break
     
@@ -53,7 +55,9 @@ def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, ini
     bb_trace_int = [int(x[0],16) for x in bb_trace]
     init_index = bb_trace_int.index(int(init_point, 16))
     for list_elem in bb_trace:
-        if(bb_trace_int.index(int(list_elem[0], 16)) < init_index):
+        if(bb_trace_int.index(int(list_elem[0], 16)) < init_index and not (int(list_elem[0], 16) == int("0x43511", 16)) \
+            and not (int(list_elem[0], 16) == int("0x434c0", 16)) and not (int(list_elem[0], 16) == int("0x16fd30", 16))\
+                 and not (int(list_elem[0], 16) == int("0x167d19", 16))):
             if(text_section_start_address <= int(list_elem[0], 16) <= text_section_end_address):
                 trap_address = int(list_elem[0], 16) + library_offset
                 for j in range(1, len(pgmap_list)):
@@ -70,8 +74,9 @@ def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, ini
                     f.seek(binary_offset,0)
                     bytes_data = f.read(1)
                     if((bytes_data.encode('hex') == (b'\x90').encode('hex'))):
-                        print('Found the fffff')
-                        print(bytes_data.encode('hex'))
+                        if DEBUG:
+                            print('Basic block starts with NOP instruction at address and not removed:', list_elem[0])
+                            print(bytes_data.encode('hex'))
                         config_list_data+=''
                         config_list_address+=''
                         binary_offset = 0
@@ -79,7 +84,9 @@ def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, ini
                         i+=1
                     else:
                         new_bb_list.append(list_elem)
-                        print("The offset in the pages-1.img is:", binary_offset, "(decimal)", list_elem[0], list_elem[1])
+                        if DEBUG:
+                            print("The offset in the pages-1.img is:", binary_offset, "(decimal)", "address", \
+                                list_elem[0], "size", list_elem[1])
                         f.seek(-1,1)
                         f.write(b'\xCC')
                         binary_offset = 0
@@ -93,6 +100,9 @@ def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, ini
                         config_list_both += '{{ {0} , 0x{1} }}'.format(int(list_elem[0], 16),bytes_data.encode('hex'))
                         i+=1
     
+    if DEBUG:
+        print("The number of BBs where traps are added is:", len(new_bb_list))
+
     with open(os.path.join(filepath, 'config_init_data.h'), 'wb+') as config_file:
         config_file.write("%s" % config_list_data)
     
@@ -114,6 +124,8 @@ def remove_init_drio(filepath, library_offset, pid, init_trap_file):
     pages_id = pgmap_list[0]['pages_id']
     binary_offset = 0
     pg_offset = 0
+    bb_counter = 0
+    removed_size = 0
 
     with open("bb_list_file", 'r') as bb_file:
         bb_trace = json.load(bb_file)
@@ -131,7 +143,7 @@ def remove_init_drio(filepath, library_offset, pid, init_trap_file):
             break
     f.close()
 
-    print(data_list)
+    #print(data_list)
     data_list = [(x - library_offset) for x in data_list]
     bb_trace_int = [int(x[0], 16) for x in bb_trace_original]
 
@@ -149,8 +161,12 @@ def remove_init_drio(filepath, library_offset, pid, init_trap_file):
                             binary_offset = pg_offset + (trap_address - map_address)
                 pg_offset = pg_offset + (4096 * pages)
             
-            print("This offset has been permanently removed at offset", binary_offset, "(decimal)", "file offset:",\
-                 list_elem[0], "size:", list_elem[1])
+            #Increment BB counter to count number of basic blocks removed
+            bb_counter+=1
+            removed_size += int(list_elem[1])
+            if DEBUG:
+                print("This offset has been permanently removed at offset", binary_offset, "(decimal)", "file offset:",\
+                    list_elem[0], "size:", list_elem[1])
             # Modify binary
             with open(os.path.join(filepath, 'pages-%s.img' % pages_id), mode='r+b') as f:
                 f.seek(binary_offset,0)
@@ -158,7 +174,12 @@ def remove_init_drio(filepath, library_offset, pid, init_trap_file):
                 binary_offset = 0
                 pg_offset = 0
         else:
-            print('Data not removed at file offset:', list_elem[0],"of size", list_elem[1])
+            if DEBUG:
+                print('Data not removed at file offset:', list_elem[0],"of size", list_elem[1])
+
+    if DEBUG:   
+        print("The total number of basic blocks permanently removed is:", bb_counter)
+        print("The total number of bytes of data removed is:", removed_size)
 
 # Adds traps into the CRIU binary image
 def remove_init(filepath, address, library_offset, pid, size):
@@ -175,14 +196,17 @@ def remove_init(filepath, address, library_offset, pid, size):
                 map_address = pgmap_list[i][key]
                 if(map_address <= trap_address < (map_address + pages * 4096)):
                     binary_offset = pg_offset + (trap_address - map_address)
-                    print("The trap address is", trap_address)
+                    if DEBUG:
+                        print("The trap address is", trap_address)
         pg_offset = pg_offset + (4096 * pages)
     
-    print("The offset in the pages-1.img is:", binary_offset, "(decimal)")
+    if DEBUG:
+        print("The offset in the pages-1.img is:", binary_offset, "(decimal)")
     # Modify binary
     with open(os.path.join(filepath, 'pages-%s.img' % pages_id), mode='r+b') as f:
         f.seek(binary_offset,0)
         bytes_data = f.read(1)
-        print("The data at the location is:", bytes_data.encode('hex'))
+        if DEBUG:
+            print("The data at the location is:", bytes_data.encode('hex'))
         f.seek(-1,1)
         f.write(b'\xCC' * size)

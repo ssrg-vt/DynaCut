@@ -1,7 +1,10 @@
+from __future__ import print_function
 import re
 from elftools.elf.elffile import ELFFile
 from collections import OrderedDict
 import sys
+
+DEBUG = False
 
 def merge_log(file_list, name):
     bb_list = []
@@ -16,11 +19,11 @@ def merge_log(file_list, name):
         content = [x.strip() for x in content]
         for i in range(len(content)):
             if name in content[i]:
-                print('Inside if')
+                #print('Inside if')
                 i+=1
                 module_id = content[i].split(',')[0]
                 binary_path = content[i].split(', ')[6]
-                print(module_id)
+                #print(module_id)
                 break
 
         for j in range(len(content)):
@@ -42,6 +45,8 @@ def merge_log(file_list, name):
                     bb_list.append(list_elem)
                     f.close()
     #bb_list.sort(key = lambda x: intx[2])
+    if DEBUG:
+        print("The total number of executed BBs is:", len(bb_list))
     # To remove duplicates
     for list_elem in bb_list:
         if list_elem not in bb_list_no_duplicates:
