@@ -11,7 +11,7 @@ from elftools.elf.elffile import ELFFile
 
 #Change to true to print
 
-DEBUG = False
+DEBUG = True
 
 def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, init_point):
     config_list_data = ''
@@ -55,9 +55,7 @@ def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, ini
     bb_trace_int = [int(x[0],16) for x in bb_trace]
     init_index = bb_trace_int.index(int(init_point, 16))
     for list_elem in bb_trace:
-        if(bb_trace_int.index(int(list_elem[0], 16)) < init_index and not (int(list_elem[0], 16) == int("0x43511", 16)) \
-            and not (int(list_elem[0], 16) == int("0x434c0", 16)) and not (int(list_elem[0], 16) == int("0x16fd30", 16))\
-                 and not (int(list_elem[0], 16) == int("0x167d19", 16))):
+        if(bb_trace_int.index(int(list_elem[0], 16)) < init_index):
             if(text_section_start_address <= int(list_elem[0], 16) <= text_section_end_address):
                 trap_address = int(list_elem[0], 16) + library_offset
                 for j in range(1, len(pgmap_list)):
@@ -117,7 +115,8 @@ def config_remove_init(filepath, pid, library_offset, bb_trace, binary_path, ini
 
 # Parses the DynamoRIO log and removes init functions from the master image given the init point
 def remove_init_drio(filepath, library_offset, pid, init_trap_file):
-
+    removed_bbs = []
+    
     pgmap_img, _= pycriu.utils.readImages(pid, filepath)
     bb_trace = []
     pgmap_list = pgmap_img['entries']
@@ -167,6 +166,8 @@ def remove_init_drio(filepath, library_offset, pid, init_trap_file):
             if DEBUG:
                 print("This offset has been permanently removed at offset", binary_offset, "(decimal)", "file offset:",\
                     list_elem[0], "size:", list_elem[1])
+            temp = [str(list_elem[0]), str(list_elem[1])]
+            removed_bbs.append(temp)
             # Modify binary
             with open(os.path.join(filepath, 'pages-%s.img' % pages_id), mode='r+b') as f:
                 f.seek(binary_offset,0)
@@ -180,6 +181,11 @@ def remove_init_drio(filepath, library_offset, pid, init_trap_file):
     if DEBUG:   
         print("The total number of basic blocks permanently removed is:", bb_counter)
         print("The total number of bytes of data removed is:", removed_size)
+    
+    # Write BB list to file
+    with open('bb_list_removed', 'wb+') as f_write:
+         for item in removed_bbs:
+             f_write.write("%s\n" % item)
 
 # Adds traps into the CRIU binary image
 def remove_init(filepath, address, library_offset, pid, size):

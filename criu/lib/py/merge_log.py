@@ -4,7 +4,7 @@ from elftools.elf.elffile import ELFFile
 from collections import OrderedDict
 import sys
 
-DEBUG = False
+DEBUG = True
 
 def merge_log(file_list, name):
     bb_list = []
@@ -52,12 +52,15 @@ def merge_log(file_list, name):
         if list_elem not in bb_list_no_duplicates:
             bb_list_no_duplicates.append(list_elem)
     
+    if DEBUG:
+        print("The total number of deduplicated executed BBs is:", len(bb_list_no_duplicates))
     # Display BB list
     #for i in range(len(bb_list)):
     #    print(bb_list[i])
     
-    # Write BB list to file
-    # with open('bb_list', 'wb+') as f_write:
-    #      for item in bb_list_no_duplicates:
-    #          f_write.write("%s\n" % item)
+    #Write BB list to file
+    with open('bb_list_executed', 'wb+') as f_write:
+         for item in bb_list_no_duplicates:
+             f_write.write("%s\n" % item)
+    
     return bb_list_no_duplicates, binary_path

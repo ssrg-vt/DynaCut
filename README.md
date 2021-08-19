@@ -13,7 +13,8 @@ Table of Contents
       * [Find the basic blocks of the unwanted feature](#find-the-basic-blocks-of-the-unwanted-feature)
       * [Disable the unwanted feature by rewriting the CRIU process image](#disable-the-unwanted-feature-by-rewriting-the-criu-process-image)
       * [Test the correctness of dynamic feature removal](#test-the-correctness-of-dynamic-feature-removal)
-   * [Dynamically remove the initialization code](#dynamically-remove-the-initialization-code)
+   * [Dynamically remove the initialization code for a toy example](#dynamically-remove-the-initialization-code-for-a-toy-example)
+   * [Dynamically remove the initialization code for macrobenchmarks](#dynamically-remove-the-initialization-code-for-macrobenchmarks)
    * [Example: adding a signal handler to a process](#example-adding-a-signal-handler-to-a-process)
    * [Installing Lighttpd and nginx](#installing-lighttpd-and-nginx)
    * [Testing adding signal handler to Lighttpd and Multiple features removal (GCC 9.3.0 and Ubuntu 20.04)](#testing-adding-signal-handler-to-lighttpd-and-multiple-features-removal-gcc-930-and-ubuntu-2004)
@@ -218,37 +219,101 @@ The PID is 159906. signal #5. rip: 0x5555555a2c71
 The signal is: 5
 ```
 
-## Dynamically remove the initialization code
+## Dynamically remove the Initialization code for a toy example
+In this example, we simulate initialization functions removal.
+
+First compile the init-example.c file located in tests/example.
+
+This file has an SIGINT handler that we consider as *undesired*.
+
+Follow the steps below to test this example: 
+
+1. Generate a `drcov` trace of this executable, at the end of the execution, the application prints "SIGINT me now", send a SIGINT then, this is to record the execution of the SIGINT handler in the trace. 
+
+```
+❯ ~/SSRG/DynamoRIO-Linux-8.0.0-1/bin64/drrun -t drcov -dump_text -- ./init-example
+
+
+CRiU dump me now
+SIGINT me now
+
+^C2 received
+```
+
+We now have the trace for the application. 
+
+To remove initialization basic blocks, follow the below steps: 
+
+Copy the `config_init.sh` script located in tools/scripts/initialization_functions_removal and the `remove_init.sh` script located in tools/scripts/initialization_functions_removal to a test-folder. 
+
+Copy the signal handler code to this location. The Signal Handler code is located in: tests/sighandler/multi_sig_init.c
+
+Run the executable again.
+
+First run the `config_init.sh` script when the application prints "CRiU dump me now". 
+
+The input to the script is: 
+1. The name of the application. 
+2. The path to the drcov log(s) of the application 
+3. Path to modified CRiU 
+4. The Initialization point to be considered -- use any address in the application from the execution trace that is executed *after* the SIGINT handler. 
+
+For example, if the address of the SIGINT handler is `0x11e9`, it will be recorded in the execution trace. Choose an address *in the application* that is executed after this address, in this case we chose `0x128c`.
+
+**Do not SIGINT the application now, wait for it to finish execution**
+
+Example:
+```
+./config_init.sh "init-example" ./drcov.init-example.81382.0000.proc.log ~/SSRG/PopSnapshot/criu 0x128c
+```
+The application will be restored with the SIGINT handler disabled. 
+
+Now, run the `remove_init.sh` script. 
+
+The input to this script is: 
+
+1. Name of the application.
+2. Path to modified CRiU. 
+3. Path to locations.txt, which is the whitelist of the locations generated in the first step. This file is usually generated in the same folder as the path to the binary. 
+
+Example:
+```
+./remove_init.sh "init-example" ~/SSRG/PopSnapshot/criu ./locations.txt
+```
+We have removed the SIGINT handler and restored the application. 
+
+When a SIGINT is sent to this modified application, it should crash with a SIGTRAP signal. 
+
+## Dynamically remove the Initialization code for macrobenchmarks
 
 To remove initialization basic blocks, follow the below steps: 
 
 We have two scripts to remove initialization code. The first script is the `config_init.sh` script located in tools/scripts/initialization_functions_removal and the `remove_init.sh` script located in tools/scripts/initialization_functions_removal 
 
-Copy these scripts to the CRiU dump folder of the application. Also copy the signal handler code to this location. The Signal Handler code is located in: tests/sighandler/multi_sig_init.c
-
 For NGINX, use the `config_init_nginx.sh` script. 
 
-First, run the config_init.sh script inside the CRiU dump folder. Note that the application has to be checkpointed before running this script. 
+Copy these scripts to a test-folder. Also copy the signal handler code to this location. The Signal Handler code is located in: tests/sighandler/multi_sig_init.c
+
+First, run the application using step [Installing Lighttpd and nginx](#installing-lighttpd-and-nginx). Next, run the config_init.sh script inside the test-folder. 
 
 
 The input to the script is: 
 1. The name of the application. 
-2. The path to the drcov log of the application 
+2. The path to the drcov log(s) of the application 
 3. Path to modified CRiU 
-4. The initialization point to be considered; For lighttpd: location of `server_main_loop` and for NGINX: before the process forks.
-5. The VMA base address of the application. 
+4. The Initialization point to be considered; For lighttpd: location of `server_main_loop` and for NGINX: location of `ngx_worker_process_cycle`.
 
 Example for lighttpd: 
 ```
-❯ ./config_init.sh "lighttpd" ~/drrun-dump/drcov.lighttpd.84903.0000.thd.log ~/SSRG/PopSnapshot/criu 0x11831 0x557711fb2000
+❯ ./config_init.sh "lighttpd" ~/drrun-dump/drcov.lighttpd.84903.0000.thd.log ~/SSRG/PopSnapshot/criu 0x11831
 ```
 
 Example for NGINX: 
 ```
-❯ ./config_init.sh "nginx" ~/drio-nginx/drcov.nginx.131318.0000.thd.log ~/drio-nginx/drcov.nginx.131319.0000.thd.log ~/SSRG/PopSnapshot/criu 0x5baeb 0x56528a783000
+❯ ./config_init_nginx.sh "nginx" ~/drio-nginx/drcov.nginx.131318.0000.thd.log ~/drio-nginx/drcov.nginx.131319.0000.thd.log ~/SSRG/PopSnapshot/criu 0x5f356
 ```
 
-The next step is to restore the application after the configuration step. This step is to create the whitelist of the basic blocks that should not be removed. 
+The application is restored with the modifications. This step is to create the whitelist of the basic blocks that should not be removed -- test all the desired features in this step.  
 
 Once the required functionality is executed in this step, SIGINT the application or let it exit(in the case of SPEC applications). A `locations.txt` file is created in the folder which contains the application binary. 
 
@@ -256,27 +321,27 @@ Next, run the `remove_init.sh` script located in tools/scripts/initialization_fu
 
 The input to this script is: 
 
-1. Path to modified CRiU. 
-2. VMA base address, same as the one used for the configure step. 
-3. Path to locations.txt, which is the whitelist of the locations. This file is usually generated in the same folder as the path to the binary. 
+1. Name of the application.
+2. Path to modified CRiU. 
+3. Path to locations.txt, which is the whitelist of the locations generated in the first step. This file is usually generated in the same folder as the path to the binary. 
 
 Example:
 
 ```
-❯ ./remove_init.sh ~/SSRG/PopSnapshot/criu 0x56528a783000 ~/SSRG/PopSnapshot/tests/nginx/locations.txt
+❯ ./remove_init.sh "lighttpd" ~/SSRG/PopSnapshot/criu ~/SSRG/PopSnapshot/tests/nginx/locations.txt
 ```
 
 Example:
 
 ```
-❯ ./remove_init.sh ~/SSRG/PopSnapshot/criu 0x557711fb2000 ~/SSRG/PopSnapshot/tests/lighttpd/locations.txt
+❯ ./remove_init.sh "nginx" ~/SSRG/PopSnapshot/criu ~/SSRG/PopSnapshot/tests/lighttpd/locations.txt
 ```
 
 We have removed all the basic blocks which were considered as init basic blocks and which were not present in the whitelist. 
 
 Finally, to see the output, set the `DEBUG flag = True` in remove_init.py located in  criu/lib/py/remove_init.py
 
-The application can then be restored with the init functions removed. 
+The application is then restored with the init functions removed. 
 
 ## Example: adding a signal handler to a process
 
