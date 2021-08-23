@@ -7,28 +7,33 @@ Table of Contents
 =================
 
 * [Dynamic and Adaptive Code Customization with Process Rewriting](#dynamic-and-adaptive-code-customization-with-process-rewriting)
-   * [Install pre-requisites, build CRIU and test examples](#install-pre-requisites-build-criu-and-test-examples)
-      * [Disable the int3 code blocks with injected signal handler](#disable-the-int3-code-blocks-with-injected-signal-handler)
+* [Table of Contents](#table-of-contents)
+   * [Install pre-requisites and build CRIU](#install-pre-requisites-and-build-criu)
+   * [Build, run and customize a test program](#build-run-and-customize-a-test-program)
+      * [Disable the int3 code blocks by dynamically injecting a signal handler](#disable-the-int3-code-blocks-by-dynamically-injecting-a-signal-handler)
    * [Dynamically remove unwanted features for application process](#dynamically-remove-unwanted-features-for-application-process)
       * [Find the basic blocks of the unwanted feature](#find-the-basic-blocks-of-the-unwanted-feature)
       * [Disable the unwanted feature by rewriting the CRIU process image](#disable-the-unwanted-feature-by-rewriting-the-criu-process-image)
       * [Test the correctness of dynamic feature removal](#test-the-correctness-of-dynamic-feature-removal)
-   * [Dynamically remove the initialization code for a toy example](#dynamically-remove-the-initialization-code-for-a-toy-example)
-   * [Dynamically remove the initialization code for macrobenchmarks](#dynamically-remove-the-initialization-code-for-macrobenchmarks)
+   * [Dynamically remove the Initialization code for a toy example](#dynamically-remove-the-initialization-code-for-a-toy-example)
+   * [Dynamically remove the Initialization code for macrobenchmarks](#dynamically-remove-the-initialization-code-for-macrobenchmarks)
    * [Example: adding a signal handler to a process](#example-adding-a-signal-handler-to-a-process)
    * [Installing Lighttpd and nginx](#installing-lighttpd-and-nginx)
    * [Testing adding signal handler to Lighttpd and Multiple features removal (GCC 9.3.0 and Ubuntu 20.04)](#testing-adding-signal-handler-to-lighttpd-and-multiple-features-removal-gcc-930-and-ubuntu-2004)
    * [Testing adding signal handler to NGINX and Multiple features removal (GCC 9.3.0 and Ubuntu 20.04)](#testing-adding-signal-handler-to-nginx-and-multiple-features-removal-gcc-930-and-ubuntu-2004)
    * [CURL commands to test PUT, DELETE and GET](#curl-commands-to-test-put-delete-and-get)
 
+Created by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc)
+## Install pre-requisites and build CRIU
 
-
-
-## Install pre-requisites, build CRIU and test examples
-
-Apart from [the packages needed by Vanilla CRIU](https://criu.org/Installation), the following packages are required:
+On Ubuntu 20.04, install the following packages required by [CRIU](https://criu.org/Installation). If you are using a different OS, please follow this link: [packages needed by CRIU](https://criu.org/Installation).
 ```
-❯ pip install capstone pyelftools
+❯ sudo apt install libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler protobuf-compiler python-protobuf libnl-3-dev libcap-dev libaio-dev libcap-dev python-ipaddress
+```
+
+You also need to install the following python modules required by DynaCut:
+```
+❯ pip2 install capstone pyelftools
 ```
 
 Once you installed all the required packages, build the CRIU with:
@@ -39,14 +44,26 @@ Once you installed all the required packages, build the CRIU with:
   LINK     lib/c/libcriu.a
   GEN      lib/py/images/magic.py
 ```
-
-Build the toy application with:
+## Build, run and customize a test program
+Build a toy application with:
 ```
 ❯ make -C tests/example multi_path
 ```
 We inserted `int3` on multiple places in this toy application (`multi_path`). Each `int3` code block indicates an unwanted feature that we don't want to touch. To disable that feature dynamically, we checkpoint the running process with CRIU and use our tool to inject a signal handler that skips the `int3` code blocks.
 
-### Disable the `int3` code blocks with injected signal handler
+The following commands show what happens when running `multi_path` directly without dynamic code customization:
+```
+❯ ./tests/example/multi_path -n 2
+pid: 1016353, cnt: 2
+1
+2
+In function main, trap (int3) next ...
+zsh: trace trap (core dumped)  ./tests/example/multi_path -n 2
+❯ dmesg|tail -n 1
+[4168258.792816] traps: multi_path[1016353] trap int3 ip:5555555553b4 sp:7fffffffe950 error:0 in multi_path[555555555000+1000]
+```
+
+### Disable the `int3` code blocks by dynamically injecting a signal handler
 First, we need to indentify the unwanted code block locations. You can use
 `objdump -S <bin>` to find the `int3` code block location and the length. Fill
 the value pairs to `tests/sighandler/config.h`. The following is an example:
@@ -59,14 +76,16 @@ Next, build the signal handler:
 ❯ make -C tests/sighandler multi_path_sighandler
 ```
 
-Now let's checkpoint a running process:
+Now let's checkpoint a running process. You need to open two terminals one for running this toy program, the other for checkpointing this running process with our script.
 ```
-❯ ./tests/example/multi_path -n 7 &
-pid: 43585, cnt: 7
+❯ ./tests/example/multi_path -n 7
+pid: 1017144, cnt: 7
 1
 2
 3
-[1]    43585 killed     ./tests/example/multi_path -n 7
+zsh: killed     ./tests/example/multi_path -n 7
+```
+```
 ❯ ./tools/scripts/dump.sh multi_path
 ```
 The saved process image should be in `./vanilla-dump`.
