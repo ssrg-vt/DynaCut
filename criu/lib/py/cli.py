@@ -8,12 +8,13 @@ import re
 import subprocess
 import sys
 
-import pycriu
+#import pycriu
 import pycriu.add_sig_handler
 import pycriu.disasm_pages
 import pycriu.process_edit
 import pycriu.remove_init
 import pycriu.merge_log
+import pycriu.unmap_vmas
 
 
 def inf(opts):
@@ -127,6 +128,17 @@ def config_init_drio(opts):
         if(p['ppid'] == 0):
             pycriu.remove_init.config_remove_init(directory, get_task_id(p, 'pid'), start_address,\
                  bb_list, binary_path, init_point)
+
+def unmap_vmas(opts):
+    directory=get_default_arg(opts, 'dir', "./")
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    vma_address = opts['vma_address']
+    pid = opts['pid']
+    num_pages = opts['num_pages']
+    for p in ps_img['entries']:
+        if(int(get_task_id(p,'pid')) == int(pid)):
+            pycriu.unmap_vmas.unmap_vmas(directory, get_task_id(p,'pid'),\
+            vma_address, int(num_pages))
 
 
 def disasm(opts):
@@ -732,7 +744,14 @@ def main():
     ci_parser.add_argument('-input', '--input_files', help='input logs to merge', type=str, nargs='*')
     ci_parser.set_defaults(func=config_init_drio, nopl=False)
     
-    
+    # Unmapping VMA regions
+    uv_parser = subparsers.add_parser('uv',help='Remove unwated VMA regions from memory')
+    uv_parser.add_argument('-d','--dir', help='directory containing the images (local by default)')
+    uv_parser.add_argument('-va','--vma_address', help='VMA address')
+    uv_parser.add_argument('-np','--num_pages', help='Number of pages to remove')
+    uv_parser.add_argument('-p','--pid', help='PID of the process from which pages have to be unmapped')
+    uv_parser.set_defaults(func=unmap_vmas, nopl=False)
+
     opts = vars(parser.parse_args())
 
 
