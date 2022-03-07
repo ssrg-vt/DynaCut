@@ -25,6 +25,30 @@ Export the the DynamoRIO Home path:
 source ./export_drio.sh
 ```
 
+Run the `init-example` using `dynamorio/drcov`. We want to ask `drcov` to dump the code coverage information to a file after the initialization phase.
+```
+./dynamorio/exports/bin64/drrun -root ./dynamorio/build -c ./dynamorio/build/clients/lib64/debug/libdrcov.so -dump_text -nudge_dump --  ./tests/example/init-example
+```
+Open another terminal and use nudge to dump the execution log for the initialization phase:
+```
+./dynamorio/build/bin64/nudgeunix  -pid $(pidof init-example) -client 0 2
+```
+
+You will get two log files. This first one is the code coverage of the 1st execution phase (init phase); the 2nd file is the code coverage of the 2nd execution phase (serving phase):
+```
+❯ ls drcov.init-example.885048.000*
+drcov.init-example.885048.0000.proc.log  drcov.init-example.885048.0001.proc.log
+```
+Next, run the `./tracediff.py` tool to find the basic blocks that only belong to the initialization execution phase. Note module[  5] is the code section of the `init-example`:
+```
+❯ ./tools/scripts/tracediff.py -u drcov.init-example.885048.0000.proc.log -b drcov.init-example.885048.0001.proc.log | grep "\[  5\]:"
+[1718] module[  5]: 0x00000000000000a0,  46
+[1738] module[  5]: 0x0000000000000260,  49
+[1739] module[  5]: 0x0000000000000000,  20
+[1740] module[  5]: 0x0000000000000016,   5
+... ...
+```
+In this case, there are 29 basic block that only belongs to the initialization phase.
 
 ## Abhijit's document
 In this example, we simulate initialization functions removal.
