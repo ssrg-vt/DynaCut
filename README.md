@@ -14,6 +14,7 @@ Table of Contents
 
 Created by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc)
 
+Created by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc). (To generate the ToC of README.md, just run `./gh-md-toc README.md`)
 
 ## [Build DynaCut](docs/build_dynacut.md)
 
