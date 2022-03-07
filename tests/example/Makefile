@@ -12,7 +12,7 @@ multi_path: multi_path.c
 loop: stack_obj_func_loop.c
 	gcc -Wall -g -o $@ $<
 
-loop: init-example.c
+init-example: init-example.c
 	gcc -Wall -g -o $@ $<
 
 clean:

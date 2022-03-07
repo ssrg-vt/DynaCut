@@ -50,7 +50,15 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# DynaCut
 tests/example/multi_path
 tests/example/criu-example
 tests/example/simple
+tests/example/init-example
 tags
+*.log
+*.img
+.history/
+.vscode/
+.gdb_history
