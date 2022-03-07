@@ -5,33 +5,39 @@
 #include <stdlib.h>
 #include <signal.h>
 
-/* A SIGINT handler to demonstrate removal of 
- * initialization code */
-
-void handler(sig)
-int sig;
+/* Initialization functions and real functions. */
+void init1(void)
 {
-    printf("%d received\n",sig);
+    printf("In %s function (used only once).\n", __func__);
 }
 
+void init2(void)
+{
+    printf("In %s function (initialization).\n", __func__);
+}
+
+void real_func(void)
+{
+    printf("In %s function (real functional executed).\n", __func__);
+}
 
 int main()
 {
-    /* register SIGINT handler */
-    struct sigaction sa;
-    sa.sa_handler = handler;
-    sigaction(SIGINT, &sa, NULL);
+    int cnt = 10;
 
-    printf("CRiU dump me now\n");
+    init1();
+    init2();
+    real_func();
+    init2();
+
+    printf("The initialization has been finished! You can dump now.\n");
     
-    /* sleep to allow user to checkpoint */
-    sleep(30);
-    
-    printf("SIGINT me now\n");
-    printf("\n");
-    
-    /* sleep to allow user to send a SIGINT */
-    sleep(40);
+    while (cnt--) {
+        printf("[%2d]\n", cnt);
+        sleep(1);
+    }
+
+    real_func();
     
     return 0;
 }
