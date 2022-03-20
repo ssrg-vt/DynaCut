@@ -5,10 +5,17 @@ if [ $# != 1 ]; then
     exit 1
 fi
 
+# Get the pid and dir name from the program binary name.
+PID=$(pidof -s $1)
+echo $PID
+
+DIR=$1.img
+echo $DIR
+
 # Prepare the dir for process dump
-mkdir -p vanilla-dump
-rm vanilla-dump/* -rf
+mkdir -p $DIR
+rm $DIR/* -rf
 
 # Run criu dump and change the dump image ownership
-sudo ./criu/criu/criu dump -D vanilla-dump -j -t $(pidof $1)
-sudo chown $USER:$(id -gn) vanilla-dump -R
+sudo ./criu/criu/criu dump -D $DIR -j -t $PID
+sudo chown $(id -un):$(id -gn) $DIR -R

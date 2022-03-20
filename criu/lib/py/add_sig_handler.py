@@ -348,7 +348,7 @@ def config_add_sig_handler(filepath, library_address_trap, jump_address, pid):
             config_list+= ','
         config_list += '{{ {0},{1} }}'.format(contents_list[i], offset_to_write)
         #Add traps in the binary
-        pycriu.process_edit.modify_binary_dynamic(filepath, library_address_trap, int(contents_list[i], 16), pid)
+        pycriu.process_edit.pedit_update_a_byte(filepath, library_address_trap, int(contents_list[i], 16), pid, 0xCC)
     
     with open(os.path.join(filepath, 'config.h'), 'wb+') as config_file:
         config_file.write("%s" % config_list)

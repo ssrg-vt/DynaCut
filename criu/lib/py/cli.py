@@ -87,7 +87,7 @@ def mbd(opts):
         raise Exception("Offset address cannot be empty!")
     ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
     for p in ps_img['entries']:
-        pycriu.process_edit.modify_binary_dynamic(directory, int(start_address, 16), int(offset, 16), get_task_id(p, 'pid'))
+        pycriu.process_edit.pedit_update_a_byte(directory, int(start_address, 16), int(offset, 16), get_task_id(p, 'pid'), 0xCC)
 
 def remove_init(opts):
     start_address=opts['startaddress']
@@ -533,12 +533,14 @@ def pedit_insert_sighandler(opts):
     process_img_dir = opts['dir']
     sighandler_lib = opts['sighandler_path']    # optional in crit cmdline
     vma_start_address = opts['addr']
+    #verifier = opts['verify']
     if not sighandler_lib:
         sys.stderr.write("crit: error: too few arguments (No sighandler path)")
         sys.exit(1)
 
     # Retrieve the handler address by adding the base VMA and the handler offset
     nm = subprocess.Popen(["nm", opts['sighandler_path']], stdout=subprocess.PIPE)
+    # TODO: the sighandler MUST use trap_handler as its handler name
     grep = subprocess.Popen(["grep", "trap_handler"], stdin=nm.stdout, stdout=subprocess.PIPE)
     result, _ = grep.communicate()
     handler_offset = int(result.split()[0], 16)
@@ -570,8 +572,8 @@ def pedit_insert_int3(opts):
         sys.exit(1)
     ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
     for p in ps_img['entries']:
-        pycriu.process_edit.modify_binary_dynamic(process_img_dir,
-                int(base, 16), int(offset, 16), get_task_id(p, 'pid'))
+        pycriu.process_edit.pedit_update_a_byte(process_img_dir,
+                int(base, 16), int(offset, 16), get_task_id(p, 'pid'), 0xCC)
 
 # Update (modify) a single byte with the value.
 # Use: ./criu/crit/crit edit update byte <img dir> <base_addr> -offset <offset> -value <value>
@@ -588,6 +590,26 @@ def pedit_update_byte(opts):
     for p in ps_img['entries']:
         pycriu.process_edit.pedit_update_a_byte(process_img_dir,
                 int(base, 16), int(offset, 16), get_task_id(p, 'pid'), int(value,16))
+
+# Remove init code by replacing the 1st byte with int3
+# Use: ./criu/crit/crit edit rm init <img dir> <base_addr> -file <file>
+# Example: ./criu/crit/crit edit rm init loop.img 0x555555554000 -file init.log
+def pedit_rm_init_log(opts):
+    base = opts['addr']
+    process_img_dir = opts['dir']
+    init_log = opts['file']
+    if not init_log:
+        sys.stderr.write("crit: error: too few arguments (no init log file)")
+        sys.exit(1)
+    with open(init_log) as file:
+        lines = file.readlines()
+    #print(lines)
+    ps_img = pycriu.images.load(dinf(opts, 'pstree.img'))
+    for p in ps_img['entries']:
+        for line in lines:
+            pycriu.process_edit.pedit_update_a_byte(process_img_dir,
+                int(base, 16), int(line, 16), get_task_id(p, 'pid'), 0xCC)
+
 # ===== End Process Editing functions =====
 
 def pedit_insert(opts):
@@ -598,8 +620,10 @@ def pedit_insert(opts):
     switcher.get(opts['what'])(opts)
 
 def pedit_rm(opts):
-    print("TODO: choice rm not implemented yet.")
-    print(opts)
+    switcher = {
+        'init': pedit_rm_init_log
+    }
+    switcher.get(opts['what'])(opts)
 
 def pedit_update(opts):
     print(opts)
@@ -608,6 +632,8 @@ def pedit_update(opts):
     }
     switcher.get(opts['what'])(opts)
 
+## The main entry for "crit edit"
+# ./criu/crit/crit edit insert|rm|update ...
 def process_edit(opts):
     switcher = {
         'insert': pedit_insert,
@@ -668,13 +694,15 @@ def main():
     # Process Edit
     edit_parser = subparsers.add_parser('edit', help="edit criu process images")
     edit_parser.add_argument('choice', choices=['insert', 'rm', 'update'])
-    edit_parser.add_argument('what', choices=['sighandler', 'int3', 'pages', 'byte'],
+    edit_parser.add_argument('what', choices=['sighandler', 'int3', 'pages', 'byte', 'init'],
         help='insert a \'signal handler\' or \'int3\'; remove pages')
     edit_parser.add_argument('dir')
     edit_parser.add_argument('addr', help='Address of the sighandler VMA, or the base VMA to replace int3')
     edit_parser.add_argument('-path','--sighandler_path', help='Path to the signal handler (shared library) to be loaded')
+    edit_parser.add_argument('-file', help='File containing a list of address')
     edit_parser.add_argument('-offset', help='Offset in the binary')
     edit_parser.add_argument('-value', help='Value to be updated')
+    edit_parser.add_argument('-verify', help='Insert removed code verifier')
     edit_parser.set_defaults(func=process_edit)
 
     # Add VMAs

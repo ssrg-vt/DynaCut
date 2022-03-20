@@ -1,10 +1,10 @@
 ##
 ## Basic lighttpd configuration.
 ##
-server.document-root        = "/home/usrname/lighttpd/html"
+server.document-root        = "/current-dir/www-root/html"
 server.port                 = 8888
 server.username             = "usrname"
-server.groupname            = "usrname"
+server.groupname            = "grpname"
 index-file.names            = ( "index.php", "index.html", "index.lighttpd.html" )
 
 ##
@@ -19,17 +19,17 @@ mimetype.assign             = (
   ".png"          =>      "image/png",
 )
 
- server.modules              = (
+server.modules              = (
          "mod_alias",
          "mod_webdav"
- )
+)
 
-$SERVER["socket"] == ":8888" {
+$SERVER["socket"] == ":8889" {
      server.name = "fileserver"
-     server.document-root = "/home/usrname/lighttpd/web"
-     alias.url = ( "/webdav" => "/home/usrname/lighttpd/web" )
+     server.document-root = "/current-dir/www-root/web"
+     alias.url = ( "/webdav" => "/current-dir/www-root/web" )
      $HTTP["url"] =~ "^/webdav($|/)" {
          webdav.activate = "enable"
          webdav.is-readonly = "disable"
    }
- }
+}

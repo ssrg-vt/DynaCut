@@ -62,3 +62,4 @@ tags
 .history/
 .vscode/
 .gdb_history
+peda-session-*

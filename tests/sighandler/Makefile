@@ -3,7 +3,7 @@ all:
 	gcc -shared -Wall -g -o sig.so sig.c
 	gcc -shared -Wall -fPIC -g -o sighandler.so sighandler.c
 	gcc -shared -Wall -fPIC -g -o multi_sig.so multi_sig.c
-	gcc -shared -Wall -fPIC -g -o multi_sig_init.so multi_sig_init.c
+	gcc -shared -Wall -fPIC -g -o init_removal_verifier.so init_removal_verifier.c
 
 multi_path_sighandler:
 	gcc -shared -Wall -fPIC -g -o multi_sig.so multi_sig.c
@@ -14,5 +14,10 @@ simple_handler:
 init_handler: 
 	gcc -shared -Wall -fPIC -g -o multi_sig_init.so multi_sig_init.c
 
+# signal handler for initialization code removal verification
+init_removal_verifier.so: init_removal_verifier.c
+	gcc -shared -Wall -fPIC -g -o $@ $^
+
 clean:
-	rm -rf *.o libhandler.so sig.so sighandler.so
+	rm -rf *.o libhandler.so sig.so multi_sig.so sighandler.so \
+		init_removal_verifier.so
