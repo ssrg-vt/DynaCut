@@ -1,3 +1,3 @@
 # Remove initialization code for server applications
 
-## Lighttpd
+## [Lighttpd](docs/lighttpd.md)
