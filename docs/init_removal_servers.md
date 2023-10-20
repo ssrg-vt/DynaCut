@@ -1,9 +1,17 @@
 # Remove initialization code for server applications
+
 To remove initialization basic blocks we will use the NGINX server as an example. Follow the steps below to use Dynacut to remove initialization code:
+
+1. First, build NGINX using the `build_nginx.sh` script located in `DynaCut/tests/nginx`. 
+
+2. Next, run the run_nginx.sh script. This will create dav folder at /home/$USER/nginx
+
+3. The run script also starts up nginx from the configuration files provided in the folder
+
 
 We have two scripts to remove initialization code. The first script is the config_init.sh script located in tools/scripts/initialization_functions_removal and the remove_init.sh script located in tools/scripts/initialization_functions_removal
 
-For NGINX, use the config_init_nginx.sh script.
+For NGINX, use the `config_init_nginx.sh` script.
 
 Copy these scripts to a test-folder. Also copy the signal handler code to this location. The Signal Handler code is located in: tests/sighandler/multi_sig_init.c
 
@@ -14,11 +22,7 @@ The input to the script is:
     The name of the application.
     The path to the drcov log(s) of the application
     Path to modified CRiU
-    The Initialization point to be considered; For lighttpd: location of server_main_loop and for NGINX: location of ngx_worker_process_cycle.
-
-Example for lighttpd:
-
-❯ ./config_init.sh "lighttpd" ~/drrun-dump/drcov.lighttpd.84903.0000.thd.log ~/SSRG/PopSnapshot/criu 0x11831
+    The Initialization point to be considered; for NGINX: location of `ngx_worker_process_cycle`.
 
 Example for NGINX:
 
@@ -26,7 +30,7 @@ Example for NGINX:
 
 The application is restored with the modifications. This step is to create the whitelist of the basic blocks that should not be removed -- test all the desired features in this step.
 
-Once the required functionality is executed in this step, SIGINT the application or let it exit(in the case of SPEC applications). A locations.txt file is created in the folder which contains the application binary.
+Once the required functionality is executed in this step, SIGINT the application. A locations.txt file is created in the folder which contains the application binary.
 
 Next, run the remove_init.sh script located in tools/scripts/initialization_functions_removal/remove_init.sh. This script also should be run from the dump folder itself.
 
@@ -38,11 +42,7 @@ The input to this script is:
 
 Example:
 
-❯ ./remove_init.sh "lighttpd" ~/SSRG/PopSnapshot/criu ~/SSRG/PopSnapshot/tests/nginx/locations.txt
-
-Example:
-
-❯ ./remove_init.sh "nginx" ~/SSRG/PopSnapshot/criu ~/SSRG/PopSnapshot/tests/lighttpd/locations.txt
+❯ ./remove_init.sh "nginx" ~/SSRG/DynaCut/criu ~/SSRG/Dynacut/tests/nginx/locations.txt
 
 We have removed all the basic blocks which were considered as init basic blocks and which were not present in the whitelist.
 
