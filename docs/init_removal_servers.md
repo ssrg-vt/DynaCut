@@ -9,13 +9,13 @@ To remove initialization basic blocks we will use the NGINX server as an example
 3. The run script also starts up nginx from the configuration files provided in the folder
 
 
-We have two scripts to remove initialization code. The first script is the config_init.sh script located in tools/scripts/initialization_functions_removal and the remove_init.sh script located in tools/scripts/initialization_functions_removal
+We have two scripts to remove initialization code. The first script is the `config_init.sh` script located in `tools/scripts/initialization_functions_removal` and the `remove_init.sh` script located in `tools/scripts/initialization_functions_removal`.
 
 For NGINX, use the `config_init_nginx.sh` script.
 
-Copy these scripts to a test-folder. Also copy the signal handler code to this location. The Signal Handler code is located in: tests/sighandler/multi_sig_init.c
+Copy these scripts to a test-folder. Also copy the signal handler code to this location. The Signal Handler code is located in: `tests/sighandler/multi_sig_init.c`
 
-First, run the application using step Installing Lighttpd and nginx. Next, run the config_init.sh script inside the test-folder.
+First, run the application using step Installing Lighttpd and nginx. Next, run the `config_init.sh` script inside the test-folder.
 
 The input to the script is:
 
@@ -32,7 +32,7 @@ The application is restored with the modifications. This step is to create the w
 
 Once the required functionality is executed in this step, SIGINT the application. A locations.txt file is created in the folder which contains the application binary.
 
-Next, run the remove_init.sh script located in tools/scripts/initialization_functions_removal/remove_init.sh. This script also should be run from the dump folder itself.
+Next, run the remove_init.sh script located in `tools/scripts/initialization_functions_removal/remove_init.sh`. This script also should be run from the dump folder itself.
 
 The input to this script is:
 
