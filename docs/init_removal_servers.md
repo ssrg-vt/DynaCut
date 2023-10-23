@@ -12,6 +12,8 @@ Execute basic CURL commands to generate complete logs. Refer https://github.com/
     
 ## Removing init basic blocks
 
+> **_NOTE:_** Running CRIU requires root permissions. Please refer to this link for an explanation: https://criu.org/Security.
+
 To remove initialization basic blocks we will use the NGINX server as an example. Follow the steps below to use Dynacut to remove initialization code:
 
  - Run the `run_nginx.sh` script. This will create dav folder at `/home/$USER/nginx.
@@ -38,7 +40,7 @@ Example for NGINX:
 ❯ ./config_init_nginx.sh "nginx" ~/drio-logs/drcov.nginx.131318.0000.thd.log ~/drio-logs/drcov.nginx.131319.0000.thd.log ~/DynaCut/criu 0x5f356
 ```
 
-The application is restored with the modifications. This step is to create the whitelist of the basic blocks that should not be removed -- test all the desired features in this step.
+The application is restored with the modifications. This step was to create the whitelist of the basic blocks that should not be removed. test all the desired features in this step.
 
 Once the required functionality is executed in this step, SIGINT the application. A locations.txt file is created in the folder which contains the application binary.
 
@@ -50,8 +52,6 @@ The input to this script is:
     -Path to modified CRiU.
     -Path to locations.txt, which is the whitelist of the locations generated in the first step. This file is usually generated in the same folder as the path to the binary.
 
-To see the output, set the `DEBUG = True` in `criu/lib/py/remove_init.py` before executing the following command.
-
 Example:
 ```
 ❯ ./remove_init.sh "nginx" ~/DynaCut/criu ~/Dynacut/tests/nginx/locations.txt
@@ -59,4 +59,4 @@ Example:
 
 We have removed all the basic blocks which were considered as init basic blocks and which were not present in the whitelist.
 
-The application is then restored with the init functions removed.
+The application is then restored with the init functions removed. Test all the required functionalities in the modified and restored application. 
