@@ -4,10 +4,11 @@
 
 DynaCut uses drcov logs of an application to identify initialization basic blocks. These logs need to be generated only once. To generate drcov logs for the NGINX server, follow the steps below: 
 ```
-❯  `~/DynaCut/tests/nginx/build_nginx.sh`
-❯  `~/DynaCut/DynamoRIO-Linux-8.0.0-1/bin64/drrun -t drcov -dump_text -- ~/DynaCut/tests/nginx/nginx-1.18.0/objs/nginx -g 'daemon off;' -c $PWD/nginx.conf -p /home/$USER/nginx
+❯  cd ~/Dynacut/tests/nginx
+❯  ./build_nginx.sh
+❯  ~/DynamoRIO-Linux-8.0.0-1/bin64/drrun -t drcov -dump_text -- ./nginx-1.18.0/objs/nginx -g 'daemon off;' -c $PWD/nginx.conf -p /home/$USER/nginx
 ```
-Execute basic CURL commands to generate complete logs. Refer curl_commands. 
+Execute basic CURL commands to generate complete logs. Refer https://github.com/ssrg-vt/DynaCut/blob/main/docs#curl_commands.md. 
     
 ## Removing init basic blocks
 
