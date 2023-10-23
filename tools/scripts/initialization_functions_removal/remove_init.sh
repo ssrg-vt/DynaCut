@@ -7,4 +7,4 @@ fi
 cp ./vanilla-dump/* ./test-dump
 $2/crit/crit rid -d ./test-dump -name $1 -tf $3
 
-sudo ~/SSRG/PopSnapshot/criu/criu/criu restore -j -D ./test-dump
+sudo $2/criu/criu restore -j -D ./test-dump
