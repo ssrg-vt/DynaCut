@@ -13,7 +13,7 @@ mkdir -p test-dump
 rm test-dump/* -rf
 
 # Run criu dump and change the dump image ownership
-sudo ~/SSRG/PopSnapshot/criu/criu/criu dump -D vanilla-dump -j -t $(pidof $1)
+sudo $3/criu/criu dump -D vanilla-dump -j -t $(pidof $1)
 sudo chown $USER:$(id -gn) vanilla-dump -R
 
 cp ./vanilla-dump/* ./test-dump
@@ -22,4 +22,4 @@ $3/crit/crit config_init -d ./test-dump -name $1 -input $2 -ip $4
 gcc -g -shared -fPIC ./test-dump/multi_sig_init.c -o ./test-dump/multi_sig_init.so
 $3/crit/crit ash -d ./test-dump -ha 0x10001199 -vsa 0x10000000 -dl $PWD/test-dump/multi_sig_init.so
 
-sudo ~/SSRG/PopSnapshot/criu/criu/criu restore -j -D ./test-dump
+sudo $3/criu/criu restore -j -D ./test-dump
