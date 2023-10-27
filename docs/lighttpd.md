@@ -4,7 +4,7 @@ In this example, we test customizing the lighttpd server inside the docker conta
 
 Follow instructions here to build and run a DynaCut docker container: https://github.com/ssrg-vt/DynaCut/blob/main/docs/docker-build.md#docker_build. 
 
-## Testing adding signal handler to Lighttpd and Multiple features removal (GCC 9.3.0 and Ubuntu 20.04)
+## Testing adding signal handler to Lighttpd and Multiple features removal
 
 Once inside the docker container, follow the steps below: 
 
