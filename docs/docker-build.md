@@ -6,7 +6,7 @@ Please follow the steps below to test on the docker env:
 
 1. Build the container in the DynaCut git folder using: 
 
-> **_NOTE:_** `chown takes some time to finish, it may seem like the build is hung. 
+> **_NOTE:_** `chown` takes some time to finish, it may seem like the build is hung. 
 ```
 sudo docker build . -t dynacut-ubuntu
 ```
