@@ -35,7 +35,7 @@ In the second terminal, run the following commands:
 ❯ dynacut-usr@c223a1eae4f1:~/DynaCut/test-lighty$ ./modify_image_lighttpd.sh lighttpd . ~/DynaCut/criu/ ~/DynaCut/test-lighty/
 ```
 
-A customized version of lighty with `PUT` and `DELETE` should run in the second terminal. Check that the `PUT` and `DELETE` commands are blocked by running the CURL commands again. They should return an output similar to: 
+A customized version of lighty with `PUT` and `DELETE` blocked should run in the second terminal. Check that the `PUT` and `DELETE` commands are blocked by running the CURL commands again. They should return an output similar to: 
 
 ```
 dynacut-usr@c223a1eae4f1:~/DynaCut$ curl -v -X "DELETE" 'http://0.0.0.0:8888/webdav/hello-demo'
