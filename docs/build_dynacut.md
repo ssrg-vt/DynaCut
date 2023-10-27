@@ -29,3 +29,7 @@ Once you installed all the required packages, build the CRIU with:
 ❯ ls
 tests   tools   criu   DynamoRIO-Linux-8.0.0-1   ...
 ```
+
+## DynaCut inside a Docker container
+
+Follow instructions here to build and run DynaCut inside a Ubuntu 20 docker container [DynaCut docker](https://github.com/ssrg-vt/DynaCut/blob/main/docs/docker-build.md)
