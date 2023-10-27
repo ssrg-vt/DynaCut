@@ -68,3 +68,15 @@ dynacut-usr@c223a1eae4f1:~/DynaCut$ curl -v -X "DELETE" 'http://0.0.0.0:8888/web
 * Connection #0 to host 0.0.0.0 left intact
 ```
 
+## Unmapping a VMA 
+To unmap a VMA region for lighty, follow the steps below. 
+
+```
+❯ dynacut-usr@c2fa13ae34f5:~/DynaCut$ mkdir test
+❯ dynacut-usr@c2fa13ae34f5:~/DynaCut$ cp /tools/scripts/modify_image_lighttpd_uv.sh ./test
+❯ cd test
+❯ dynacut-usr@c2fa13ae34f5:~/DynaCut/test$ ./modify_image_lighttpd_uv.sh lighttpd . ~/DynaCut/criu <start address of VMA region>
+```
+> **_NOTE:_**  Lighttpd uses `libpthread-2.31.so`. An example of a VMA region that can be unmapped might look like: `7fe48eb58000-7fe48eb69000 r-xp 00006000 00:78 8929620                    /usr/lib/x86_64-linux-gnu/libpthread-2.31.so`
+
+After the above steps, the process should be restored with one page unmapped. the script would need to be modified to unmap more than a page.  
