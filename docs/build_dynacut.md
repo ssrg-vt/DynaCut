@@ -8,7 +8,7 @@ On Ubuntu 20.04, install the following packages required by [CRIU](https://criu.
 
 You also need to install the following python modules required by DynaCut:
 ```
-❯ pip2 install capstone pyelftools
+❯ pip2 install capstone pyelftools==0.29
 ```
 
 Once you installed all the required packages, build the CRIU with:
